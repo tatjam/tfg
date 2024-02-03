@@ -26,6 +26,7 @@ int main()
 	PanelMethod panels;
 
 	panels.thin_wings.push_back(geom);
+	panels.induced_vel(*panels.thin_wings[0], 0, Eigen::Vector3d(0, 0, 0));
 
 	panels.build_geometry_matrix();
 

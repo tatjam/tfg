@@ -24,12 +24,12 @@ private:
 
 	// Return the normal projected induced velocity vector at effect panel caused by cause panel, which would be scaled
 	// by "mu" (the doublet strength) to obtain the real induced normal velocity
-	double induced_norm_vel(const ThinWing& cause, size_t cause_panel, const ThinWing& effect, size_t effect_panel);
+	double induced_norm_vel(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, size_t effect_panel);
 
-	Eigen::Vector3d induced_vel(const ThinWing& cause, size_t cause_panel, const Eigen::Vector3d& pos);
 
 public:
 
+	Eigen::Vector3d induced_vel(const ThinWing& cause, Eigen::Index cause_panel, const Eigen::Vector3d& pos);
 	// Warning: Do not modify after calling build_geometry_matrix()
 	std::vector<std::shared_ptr<ThinWing>> thin_wings;
 

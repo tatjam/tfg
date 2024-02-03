@@ -89,9 +89,6 @@ void PlanarGeometry::generate_normals()
 
 
 		normals.col(i) = (v3 - v1).cross(v2 - v4).normalized();
-		Vector3d nrm = v4-v1;
-		Vector3d nrm2 = v3-v2;
-		nrm = nrm;
 	}
 
 }
