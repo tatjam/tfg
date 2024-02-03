@@ -20,6 +20,7 @@ ospm.exe
 *.so
 /cmake-build-debug/
 /cmake-build-release/
+/cmake-build-relwithdebinfo/
 .cache/
 *.userprefs
 .vimrc

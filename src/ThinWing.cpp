@@ -56,7 +56,7 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 		{
 			// We consider x going right and z going down for nomenclature
 			// Top left
-			out->quads(0, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi;
+			out->quads(0, xi * (num_spanwise - 1) + zi) = xi * num_chordwise + zi;
 			// Top right
 			out->quads(1, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi;
 			// Bottom right

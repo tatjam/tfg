@@ -18,7 +18,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 20, 20, 10.0, 4.0);
+	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 10, 10, 10.0, 4.0);
 	geom->generate_normals();
 	write_string_to_file("workdir/wing.dat", geom->quads_to_string());
 	write_string_to_file("workdir/wing_nrm.dat", geom->normals_to_string());
@@ -26,9 +26,9 @@ int main()
 	PanelMethod panels;
 
 	panels.thin_wings.push_back(geom);
-	panels.induced_vel(*panels.thin_wings[0], 0, Eigen::Vector3d(0, 0, 0));
 
 	panels.build_geometry_matrix();
 
+	write_string_to_file("workdir/mat.dat", panels.geometry_matrix_to_string());
 
 }
