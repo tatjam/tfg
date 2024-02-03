@@ -16,7 +16,7 @@
 
 #include "src/Core/util/DisableStupidWarnings.h"
 
-/** \defgroup Geometry_Module Geometry module
+/** \defgroup Geometry_Module PlanarGeometry module
   *
   * This module provides support for:
   *  - fixed-size homogeneous transformations
@@ -29,7 +29,7 @@
   *  - \link umeyama least-square transformation fitting \endlink
   *
   * \code
-  * #include <Eigen/Geometry>
+  * #include <Eigen/PlanarGeometry>
   * \endcode
   */
 

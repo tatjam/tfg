@@ -303,7 +303,7 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,StorageIndex>& C, Perm
       elen[i] = pn - p1 + 1;        /* elen[i] = |Ei| */
       p3 = pn;
       p4 = p1 + len[i];
-      for(p = p2 + 1; p < p4; p++) /* prune edges in Ai */
+      for(p = p2 + 1; p < p4; p++) /* prune quads in Ai */
       {
         j = Ci[p];
         if((nvj = nv[j]) <= 0) continue; /* node j dead or in Lk */

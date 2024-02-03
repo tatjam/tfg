@@ -1,7 +1,7 @@
 #include <iostream>
 #include <chrono>
 #include "Util.h"
-#include "Geometry.h"
+#include "PanelMethod.h"
 
 
 int main()
@@ -18,6 +18,16 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = Geometry::from_chord_and_camber(chord_fx, camber_fx, 20, 20, 10.0, 4.0);
-	write_string_to_file("workdir/test.dat", geom->to_string());
+	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 20, 20, 10.0, 4.0);
+	geom->generate_normals();
+	write_string_to_file("workdir/wing.dat", geom->quads_to_string());
+	write_string_to_file("workdir/wing_nrm.dat", geom->normals_to_string());
+
+	PanelMethod panels;
+
+	panels.thin_wings.push_back(geom);
+
+	panels.build_geometry_matrix();
+
+
 }

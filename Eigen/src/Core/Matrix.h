@@ -428,7 +428,7 @@ class Matrix
     EIGEN_DEVICE_FUNC EIGEN_CONSTEXPR
     inline Index outerStride() const EIGEN_NOEXCEPT { return this->innerSize(); }
 
-    /////////// Geometry module ///////////
+    /////////// PlanarGeometry module ///////////
 
     template<typename OtherDerived>
     EIGEN_DEVICE_FUNC

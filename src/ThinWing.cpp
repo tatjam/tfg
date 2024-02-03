@@ -1,13 +1,13 @@
-#include "Geometry.h"
+#include "ThinWing.h"
 
 using namespace Eigen;
 
-std::shared_ptr<Geometry>
-Geometry::from_chord_and_camber(std::function<std::pair<double, double>(double)> chord_fx,
-								std::function<double(double, double)> camber_fx,
-								size_t num_chordwise, size_t num_spanwise, double span, double chord_scale)
+std::shared_ptr<ThinWing>
+ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)> chord_fx,
+									  std::function<double(double, double)> camber_fx,
+									  size_t num_chordwise, size_t num_spanwise, double span, double chord_scale)
 {
-	auto out = std::make_shared<Geometry>();
+	auto out = std::make_shared<ThinWing>();
 
 	assert(num_spanwise > 0);
 	assert(num_chordwise > 0);
@@ -48,7 +48,7 @@ Geometry::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 	}
 
 	// Generate the rectangles
-	out->edges = Array4Xi(4, (num_spanwise - 1) * (num_chordwise - 1));
+	out->quads = Array4Xi(4, (num_spanwise - 1) * (num_chordwise - 1));
 
 	for(size_t xi = 0; xi < num_spanwise - 1; xi++)
 	{
@@ -56,52 +56,15 @@ Geometry::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 		{
 			// We consider x going right and z going down for nomenclature
 			// Top left
-			out->edges(0, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi;
+			out->quads(0, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi;
 			// Top right
-			out->edges(1, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi;
+			out->quads(1, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi;
 			// Bottom right
-			out->edges(2, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi + 1;
+			out->quads(2, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi + 1;
 			// Bottom left
-			out->edges(3, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi + 1;
+			out->quads(3, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi + 1;
 		}
 	}
 
 	return out;
-}
-
-std::string Geometry::to_string()
-{
-	// Big array of polygons
-	std::stringstream out;
-	out << std::fixed;
-	out << "{";
-
-	// Iterate over each polygon
-	for(size_t i = 0; i < edges.cols(); i++)
-	{
-		out << "{";
-
-		// Put each 3D vertex
-		for(size_t j = 0; j < 4; j++)
-		{
-			out << "{";
-
-			out << vertices(0, edges(j, i));
-			out << ",";
-			out << vertices(1, edges(j, i));
-			out << ",";
-			out << vertices(2, edges(j, i));
-
-			out << "}";
-			if(j != 3)
-				out << ",";
-		}
-
-		out << "}";
-		if(i != edges.cols() - 1)
-			out << ",";
-	}
-
-	out << "}";
-	return out.str();
 }
