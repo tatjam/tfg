@@ -14,6 +14,7 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 
 	out->vertices = Array3Xd(3, num_chordwise * num_spanwise);
 	out->trailing_edge = VectorXi(num_spanwise);
+	out->trailing_panels = VectorXi(num_spanwise - 1);
 
 	Index trail = 0;
 	// Place vertices
@@ -57,6 +58,7 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 
 	// Generate the rectangles
 	out->quads = Array4Xi(4, (num_spanwise - 1) * (num_chordwise - 1));
+	trail = 0;
 
 	for(size_t xi = 0; xi < num_spanwise - 1; xi++)
 	{
@@ -71,6 +73,12 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 			out->quads(2, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi + 1;
 			// Bottom left
 			out->quads(3, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi + 1;
+
+			if(zi == num_chordwise - 2)
+			{
+				out->trailing_panels(trail) = xi * (num_chordwise - 1) + zi;
+				trail++;
+			}
 		}
 	}
 

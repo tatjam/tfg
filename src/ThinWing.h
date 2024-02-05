@@ -11,6 +11,8 @@ public:
 
 	// Indices of the vertices which build the trailing edge where the wake is shed
 	Eigen::VectorXi trailing_edge;
+	// Indices of the quads at the trailing edge
+	Eigen::VectorXi trailing_panels;
 
 	// Generates a surface using cosine sampling
 	// chord_fx(span_pos: [-1, 1]) -> pair(chord_norm, chord_line_norm)

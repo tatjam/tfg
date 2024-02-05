@@ -2,9 +2,10 @@
 
 using namespace Eigen;
 
-void Wake::shed_from(const ThinWing &wing, double wake_scale, Eigen::Index num_edges, Eigen::Vector3d body_vel,
-					 Eigen::Vector3d omega)
+void Wake::shed_from(const ThinWing &wing, double wake_scale, Eigen::Index nnum_edges, const Eigen::Vector3d& body_vel,
+					 const Eigen::Vector3d& omega)
 {
+	num_edges = nnum_edges;
 	// Create vertices, starting from the trailing edge
 	// We index similarly to wings, (xi * num_edges + zi)
 	// where xi represents moving along the trialing edge, and zi moving back into the wake
@@ -73,4 +74,6 @@ void Wake::shed_from(const ThinWing &wing, double wake_scale, Eigen::Index num_e
 			quads(3, xi * (num_edges - 1) + zi) = xi * num_edges + zi + 1;
 		}
 	}
+
+	generate_normals();
 }

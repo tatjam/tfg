@@ -16,6 +16,7 @@ public:
 	Eigen::Array3Xd normals;
 
 	// Transform matrix
+	// WARNING: Make sure to recalculate normals if this changes!
 	Eigen::Affine3d transform;
 
 
