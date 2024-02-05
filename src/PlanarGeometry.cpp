@@ -3,12 +3,15 @@
 using namespace Eigen;
 
 
-std::string PlanarGeometry::quads_to_string()
+std::string PlanarGeometry::quads_to_string(bool internal)
 {
 	// Big array of quads
 	std::stringstream out;
 	out << std::fixed;
-	out << "{";
+	if(!internal)
+	{
+		out << "{";
+	}
 
 	// Iterate over each polygon
 	for(Index i = 0; i < quads.cols(); i++)
@@ -40,7 +43,10 @@ std::string PlanarGeometry::quads_to_string()
 			out << ",";
 	}
 
-	out << "}";
+	if(!internal)
+	{
+		out << "}";
+	}
 	return out.str();
 }
 

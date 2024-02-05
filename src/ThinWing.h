@@ -9,11 +9,8 @@ class ThinWing : public PlanarGeometry
 public:
 
 
-	// Indices of the vertice which build the trailing edge where the wake is shed
+	// Indices of the vertices which build the trailing edge where the wake is shed
 	Eigen::VectorXi trailing_edge;
-
-	// If non-zero sized, contains the last solution
-	Eigen::VectorXd solution;
 
 	// Generates a surface using cosine sampling
 	// chord_fx(span_pos: [-1, 1]) -> pair(chord_norm, chord_line_norm)

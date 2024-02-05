@@ -13,7 +13,9 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 	assert(num_chordwise > 0);
 
 	out->vertices = Array3Xd(3, num_chordwise * num_spanwise);
+	out->trailing_edge = VectorXi(num_spanwise);
 
+	Index trail = 0;
 	// Place vertices
 	for(size_t xi = 0; xi < num_spanwise; xi++)
 	{
@@ -44,6 +46,12 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 			out->vertices(1, xi * num_chordwise + zi) = y;
 			out->vertices(2, xi * num_chordwise + zi) = z;
 
+			if(zi == num_chordwise - 1)
+			{
+				out->trailing_edge(trail) = xi * num_chordwise + zi;
+				trail++;
+			}
+
 		}
 	}
 
@@ -56,7 +64,7 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 		{
 			// We consider x going right and z going down for nomenclature
 			// Top left
-			out->quads(0, xi * (num_spanwise - 1) + zi) = xi * num_chordwise + zi;
+			out->quads(0, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi;
 			// Top right
 			out->quads(1, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi;
 			// Bottom right

@@ -1,5 +1,6 @@
 #pragma once
 #include "ThinWing.h"
+#include "Wake.h"
 
 class PanelMethod
 {
@@ -14,8 +15,10 @@ private:
 	//  index = index_within_geometry + geom_sizes[geometry]
 	Eigen::MatrixXd geometry_matrix;
 
-	// normal . freestream, regenerated as needed
-	Eigen::MatrixXd freestream_rhs;
+	Eigen::ArrayXd solution;
+
+	// - normal . freestream, regenerated as needed
+	Eigen::MatrixXd rhs;
 
 	// This matrix includes the influence of dynamic elements
 	Eigen::MatrixXd dynamic_matrix;
@@ -26,18 +29,39 @@ private:
 	// by "mu" (the doublet strength) to obtain the real induced normal velocity
 	double induced_norm_vel(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel);
 
+	void build_dynamic_matrix();
+	void build_rhs();
+
+	std::vector<Wake> wakes;
 
 public:
+
+	// In body coordinates, which means that incoming airflow
+	// is constant regardless of omega
+	Eigen::Vector3d body_vel;
+	// Omega is assumed to be rotation around the origin, in body axes!
+	Eigen::Vector3d omega;
 
 	Eigen::Vector3d induced_vel(const ThinWing& cause, Eigen::Index cause_panel, const Eigen::Vector3d& pos);
 	// Warning: Do not modify after calling build_geometry_matrix()
 	std::vector<std::shared_ptr<ThinWing>> thin_wings;
 
 	void build_geometry_matrix();
-	void build_dynamic_matrix();
+
+	void shed_initial_wake(Eigen::Index num_wake_panels, double wake_distance);
+	// Builds the dynamic matrix and RHS matrix
+	void build_dynamic();
 
 	std::string geometry_matrix_to_string();
+	// (Use Import["...", "Table"][[1]] to import it in Mathematica)
+	std::string solution_to_string(size_t for_geom);
+	// Same as before but for pressure coefficients
+	std::string cps_to_string(size_t for_geom);
+
+	std::string wake_geom_to_string(size_t for_geom);
 
 	void solve();
+
+	PanelMethod();
 
 };

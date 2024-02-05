@@ -22,11 +22,13 @@ public:
 	// Export Mathematica list of vertices that can be readily
 	// parsed by Polygon to display in 3D
 	// (Use ToExpression[Import["...", "String"]] to import it)
-	std::string quads_to_string();
+	std::string quads_to_string(bool internal = false);
+
 	// Export Mathematica list of points thta can be readily
 	// parsed by Arrow to display in 3D
 	// (Use ToExpression[Import["...", "String"]] to import it)
 	std::string normals_to_string(double nrm_scale = 0.5);
+
 
 	void generate_normals();
 
