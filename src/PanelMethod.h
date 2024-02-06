@@ -17,6 +17,8 @@ private:
 
 	Eigen::ArrayXd solution;
 
+	Eigen::ArrayXd cps;
+
 	// - normal . freestream, regenerated as needed
 	Eigen::MatrixXd rhs;
 
@@ -27,6 +29,8 @@ private:
 
 	// Return the normal projected induced velocity vector at effect panel caused by cause panel, which would be scaled
 	// by "mu" (the doublet strength) to obtain the real induced normal velocity
+	Eigen::Vector3d induced_vel(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel);
+	Eigen::Vector3d induced_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel);
 	double induced_norm_vel(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel);
 	double induced_norm_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel);
 
@@ -67,6 +71,10 @@ public:
 	std::string solution_to_string(size_t for_geom);
 	// Same as before but for pressure coefficients
 	std::string cps_to_string(size_t for_geom);
+
+	void compute_cps();
+	// Requires cps to be computed
+	Eigen::Vector3d compute_aero_force();
 
 	std::string wake_geom_to_string(size_t for_geom);
 

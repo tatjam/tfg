@@ -17,6 +17,7 @@ void PanelMethod::build_geometry_matrix()
 	geometry_matrix = MatrixXd(total_size, total_size);
 	dynamic_matrix = MatrixXd(total_size, total_size);
 	rhs = MatrixXd(total_size, 1);
+	cps = MatrixXd(total_size, 1);
 
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 	{
@@ -38,20 +39,17 @@ void PanelMethod::build_geometry_matrix()
 
 }
 
-double
-PanelMethod::induced_norm_vel(const ThinWing& cause, Index cause_panel, const ThinWing& effect, Index effect_panel)
+Eigen::Vector3d PanelMethod::induced_vel(const ThinWing &cause, Eigen::Index cause_panel, const ThinWing &effect,
+										 Eigen::Index effect_panel)
 {
 	Vector3d center = get_center(effect, effect_panel);
+	return induced_vel(cause, cause_panel, center);
 
-	Vector3d ivel = induced_vel(cause, cause_panel, center);
-
-	Vector3d normal = effect.normals.col(effect_panel).matrix();
-
-	return ivel.dot(normal);
+	return Eigen::Vector3d();
 }
 
-double PanelMethod::induced_norm_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
-										  Eigen::Index effect_panel)
+Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
+											  Eigen::Index effect_panel)
 {
 	Vector3d center = get_center(effect, effect_panel);
 
@@ -68,7 +66,22 @@ double PanelMethod::induced_norm_vel_wake(const Wake &wake, Eigen::Index cause_t
 		Vector3d nrm = wake.normals.col(cause_panel);
 		acc += induced_vel_verts(verts, nrm, center);
 	}
+	return acc;
+}
 
+
+double
+PanelMethod::induced_norm_vel(const ThinWing& cause, Index cause_panel, const ThinWing& effect, Index effect_panel)
+{
+	Vector3d ivel = induced_vel(cause, cause_panel, effect, effect_panel);
+	Vector3d normal = effect.normals.col(effect_panel).matrix();
+	return ivel.dot(normal);
+}
+
+double PanelMethod::induced_norm_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
+										  Eigen::Index effect_panel)
+{
+	Vector3d acc = induced_vel_wake(wake, cause_trailing, effect, effect_panel);
 	Vector3d normal = effect.normals.col(effect_panel).matrix();
 	return acc.dot(normal);
 }
@@ -164,6 +177,12 @@ std::string PanelMethod::solution_to_string(size_t for_geom)
 {
 	std::stringstream o;
 	o << solution.block(geom_sizes[for_geom], 0, geom_sizes[for_geom + 1], 1).transpose();
+	return o.str();
+}
+std::string PanelMethod::cps_to_string(size_t for_geom)
+{
+	std::stringstream o;
+	o << cps.block(geom_sizes[for_geom], 0, geom_sizes[for_geom + 1], 1).transpose();
 	return o.str();
 }
 
@@ -277,6 +296,90 @@ Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_
 	center /= 4.0;
 	return center;
 }
+
+void PanelMethod::compute_cps()
+{
+	// We use the brute force method, where we calculate velocites above and below each panel
+	const double epsilon = 0.001;
+
+	// Panel-on-panel effect
+	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
+	{
+		for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
+		{
+			for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
+			{
+				Vector3d center = get_center(*thin_wings[effect_geom], effect);
+				// TODO: Signs
+				Vector3d freestream = -body_vel;
+				freestream -= omega.cross(center);
+				double flen2 = freestream.squaredNorm();
+				double flen = std::sqrt(flen2);
+				// Panel-on-panel
+				Vector3d induced; induced.setZero();
+
+				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
+				{
+					Vector3d tangential = induced_vel(*thin_wings[cause_geom], cause, *thin_wings[effect_geom], effect);
+					tangential *= solution(geom_sizes[cause_geom] + cause);
+					induced += tangential;
+				}
+				// Wake-on-panel effect
+				for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
+				{
+					Vector3d tangential = induced_vel_wake(wakes[cause_geom], trail_cause, *thin_wings[effect_geom], effect);
+					tangential *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
+					induced += tangential;
+				}
+
+				// Below the airfoil we have freestream - induced
+				// Above the airfoil we have freestream + induced
+				// Thus by applying Bernouilli we arrive at the following expression
+				// P_sup / rho + v_sup^2 / 2 = P_inf / rho + v_inf^2 / 2
+				// Thus 2 * (P_sup - P_inf) / rho = v_inf^2 - v_sup^2
+				// Note that in typical lifting flow, P_inf > P_sup
+				// (the more positive it's, the more lift)
+				// Note that v_sup = v_infty + induced and v_inf = v_infty - induced
+				// (Those two vectorial expressions)
+				// expanding the products we arrive at
+				// v_infty^2 + induced^2 - 2 v_infty (dot) induced - (v_infty^2 + induced^2 + 2 v_infty (dot) induced)
+				// Nearly all terms cancel out, leaving
+				// (P_sup - P_inf) / rho = -4 v_infty (dot) induced
+				// P_sup - P_inf = 0.5 * rho * v_infty^2 * c_P
+				// c_P = 2 * (P_sup - P_inf) / rho / v_infty^2
+				//     = -2 * v_infty (dot) induced / v_infty^2
+				double cp = 2.0 * freestream.dot(induced) / flen2;
+				cps(geom_sizes[effect_geom] + effect) = cp;
+			}
+		}
+	}
+
+}
+
+Eigen::Vector3d PanelMethod::compute_aero_force()
+{
+	Vector3d acc; acc.setZero();
+
+	for(size_t geom = 0; geom < thin_wings.size(); geom++)
+	{
+		for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
+		{
+			Vector3d nrm = thin_wings[geom]->normals.col(panel);
+			// We approximate the area of the cuadrilateral as two triangles
+			Vector3d v1 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(0, panel));
+			Vector3d v2 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(1, panel));
+			Vector3d v3 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(2, panel));
+			Vector3d v4 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(3, panel));
+			double area = 0.5 * (v2 - v1).cross(v3 - v1).norm() + 0.5 * (v4 - v2).cross(v4 - v3).norm();
+
+			Vector3d force = nrm * cps(geom_sizes[geom] + panel);
+			acc += force * area;
+		}
+	}
+
+	return acc;
+}
+
 
 
 
