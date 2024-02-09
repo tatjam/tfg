@@ -23,6 +23,7 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 		double xprog = M_PI * ((double)xi / (double)(num_spanwise - 1));
 		double xcos = (1.0 - std::cos(xprog)) / 2.0;
 		double x = (xcos * 2.0 - 1.0);
+		double uns_x = x;
 		auto[chord_norm, chord_pos] = chord_fx(x);
 		x *= span * 0.5;
 		double chord = chord_norm * chord_scale;
@@ -32,15 +33,16 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 		{
 			double zprog = M_PI * ((double)zi / (double)(num_chordwise - 1));
 			double zcos = (1.0 - std::cos(zprog)) / 2.0;
-			double y = camber_fx(x, zcos);
+			double y = camber_fx(uns_x, zcos);
 
 			// This ranges from -0.5->0.5
 			double z = zcos - 0.5;
 
-			// Make its center be chord_center
-			z += chord_center;
 			// And scale by chord
 			z *= chord;
+
+			// Make its center be chord_center
+			z += chord_center;
 
 			// Put the vertices
 			out->vertices(0, xi * num_chordwise + zi) = x;

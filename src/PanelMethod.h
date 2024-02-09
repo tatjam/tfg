@@ -50,6 +50,7 @@ public:
 	Eigen::Vector3d omega;
 
 	Eigen::Vector3d induced_vel(const ThinWing& cause, Eigen::Index cause_panel, const Eigen::Vector3d& pos);
+	Eigen::Vector3d induced_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const Eigen::Vector3d& pos);
 	Eigen::Vector3d induced_vel_verts(const Eigen::Matrix<double, 3, 4>& vertices,
 									  const Eigen::Vector3d& nrm,
 									  const Eigen::Vector3d& pos);
@@ -72,11 +73,14 @@ public:
 	// Same as before but for pressure coefficients
 	std::string cps_to_string(size_t for_geom);
 
-	void compute_cps();
+	void compute_cps(double epsilon);
 	// Requires cps to be computed
 	Eigen::Vector3d compute_aero_force();
 
 	std::string wake_geom_to_string(size_t for_geom);
+
+	// Obtains flow field in a rectangle defined by a corner and two sides (x_axis and y_axis) using given sample points
+	std::string sample_flow_field_to_string(Eigen::Vector3d corner, Eigen::Vector3d x_axis, Eigen::Vector3d y_axis, size_t num_x, size_t num_y);
 
 	void solve();
 

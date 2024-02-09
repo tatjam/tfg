@@ -44,15 +44,17 @@ Eigen::Vector3d PanelMethod::induced_vel(const ThinWing &cause, Eigen::Index cau
 {
 	Vector3d center = get_center(effect, effect_panel);
 	return induced_vel(cause, cause_panel, center);
-
-	return Eigen::Vector3d();
 }
 
 Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
 											  Eigen::Index effect_panel)
 {
 	Vector3d center = get_center(effect, effect_panel);
+	return induced_vel_wake(wake, cause_trailing, center);
+}
 
+Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos)
+{
 	Vector3d acc = Vector3d(0, 0, 0);
 	for(Index i = 0; i < wake.num_edges - 1; i++)
 	{
@@ -64,7 +66,7 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 		verts.col(3) = wake.vertices.col(wake.quads(3, cause_panel));
 
 		Vector3d nrm = wake.normals.col(cause_panel);
-		acc += induced_vel_verts(verts, nrm, center);
+		acc += induced_vel_verts(verts, nrm, pos);
 	}
 	return acc;
 }
@@ -297,60 +299,63 @@ Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_
 	return center;
 }
 
-void PanelMethod::compute_cps()
+void PanelMethod::compute_cps(double epsilon)
 {
-	// We use the brute force method, where we calculate velocites above and below each panel
-	const double epsilon = 0.001;
+	// This value requires some fine-tuning for certain geometries
+	// TODO: Better method instead of this brute-force one
 
 	// Panel-on-panel effect
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 	{
-		for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
-		{
 			for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
 			{
 				Vector3d center = get_center(*thin_wings[effect_geom], effect);
 				// TODO: Signs
 				Vector3d freestream = -body_vel;
 				freestream -= omega.cross(center);
-				double flen2 = freestream.squaredNorm();
-				double flen = std::sqrt(flen2);
-				// Panel-on-panel
-				Vector3d induced; induced.setZero();
+				Vector3d total_ind_top; total_ind_top.setZero();
+				Vector3d total_ind_bottom; total_ind_bottom.setZero();
 
-				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
+				Vector3d normal = thin_wings[effect_geom]->normals.col(effect);
+				Vector3d above = center + normal * epsilon;
+				Vector3d below = center - normal * epsilon;
+
+				for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
 				{
-					Vector3d tangential = induced_vel(*thin_wings[cause_geom], cause, *thin_wings[effect_geom], effect);
-					tangential *= solution(geom_sizes[cause_geom] + cause);
-					induced += tangential;
-				}
-				// Wake-on-panel effect
-				for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
-				{
-					Vector3d tangential = induced_vel_wake(wakes[cause_geom], trail_cause, *thin_wings[effect_geom], effect);
-					tangential *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
-					induced += tangential;
+					// Panel-on-panel
+					for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
+					{
+						Vector3d ind_top = induced_vel(*thin_wings[cause_geom], cause, above);
+						ind_top *= solution(geom_sizes[cause_geom] + cause);
+						Vector3d ind_bottom = induced_vel(*thin_wings[cause_geom], cause, below);
+						ind_bottom *= solution(geom_sizes[cause_geom] + cause);
+						total_ind_top += ind_top;
+						total_ind_bottom += ind_bottom;
+					}
+					// Wake-on-panel effect
+					for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
+					{
+						Vector3d tangential_top = induced_vel_wake(wakes[cause_geom], trail_cause, above);
+						tangential_top *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
+						Vector3d tangential_bottom = induced_vel_wake(wakes[cause_geom], trail_cause, below);
+						tangential_bottom *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
+						total_ind_top += tangential_top;
+						total_ind_bottom += tangential_bottom;
+					}
 				}
 
-				// Below the airfoil we have freestream - induced
-				// Above the airfoil we have freestream + induced
+
 				// Thus by applying Bernouilli we arrive at the following expression
-				// P_sup / rho + v_sup^2 / 2 = P_inf / rho + v_inf^2 / 2
-				// Thus 2 * (P_sup - P_inf) / rho = v_inf^2 - v_sup^2
-				// Note that in typical lifting flow, P_inf > P_sup
-				// (the more positive it's, the more lift)
-				// Note that v_sup = v_infty + induced and v_inf = v_infty - induced
-				// (Those two vectorial expressions)
-				// expanding the products we arrive at
-				// v_infty^2 + induced^2 - 2 v_infty (dot) induced - (v_infty^2 + induced^2 + 2 v_infty (dot) induced)
-				// Nearly all terms cancel out, leaving
-				// (P_sup - P_inf) / rho = -4 v_infty (dot) induced
-				// P_sup - P_inf = 0.5 * rho * v_infty^2 * c_P
-				// c_P = 2 * (P_sup - P_inf) / rho / v_infty^2
-				//     = -2 * v_infty (dot) induced / v_infty^2
-				double cp = 2.0 * freestream.dot(induced) / flen2;
+				// Thus 2 * (P_top - P_bottom) / rho = v_bottom^2 - v_top^2
+				// By the definition of c_P
+				// c_P = 2 * (P_top - P_bottom) / rho / v_infty^2
+				//     = (v_bottom^2 - v_top^2) / v_infty^2
+				// Where the bottom and superior terms also include the freestream term,
+				// which we approximate as the same for both
+				Vector3d v_top = total_ind_top + freestream;
+				Vector3d v_bottom = total_ind_bottom + freestream;
+				double cp = (v_bottom.squaredNorm() - v_top.squaredNorm()) / freestream.squaredNorm();
 				cps(geom_sizes[effect_geom] + effect) = cp;
-			}
 		}
 	}
 
@@ -378,6 +383,66 @@ Eigen::Vector3d PanelMethod::compute_aero_force()
 	}
 
 	return acc;
+}
+
+std::string
+PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vector3d y_axis,
+										 size_t num_x, size_t num_y)
+{
+	std::stringstream o;
+	o << std::fixed;
+	o << "{";
+
+	for(size_t y = 0; y < num_y; y++)
+	{
+		o << "{";
+		for(size_t x = 0; x < num_x; x++)
+		{
+			double xpos = (double)x / ((double)num_x - 1.0);
+			double ypos = (double)y / ((double)num_y - 1.0);
+			Vector3d pos = corner + x_axis * xpos + y_axis * ypos;
+
+			Vector3d total_ind; total_ind.setZero();
+			Vector3d freestream = -body_vel;
+			freestream -= omega.cross(pos);
+
+			for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
+			{
+				// Panel effect
+				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
+				{
+					Vector3d ind = induced_vel(*thin_wings[cause_geom], cause, pos);
+					ind *= solution(geom_sizes[cause_geom] + cause);
+					total_ind += ind;
+				}
+				// Wake effect
+				for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
+				{
+					Vector3d ind = induced_vel_wake(wakes[cause_geom], trail_cause, pos);
+					ind *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
+					total_ind += ind;
+				}
+			}
+
+			Vector3d total = freestream + total_ind;
+
+			o << "{";
+			o << total(0);
+			o << ",";
+			o << total(1);
+			o << ",";
+			o << total(2);
+			o << "}";
+			if(x != num_x - 1)
+				o << ",";
+		}
+		o << "}";
+		if(y != num_y - 1)
+			o << ",";
+	}
+
+	o << "}";
+	return o.str();
 }
 
 
