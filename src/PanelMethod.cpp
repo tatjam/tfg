@@ -221,6 +221,30 @@ std::string PanelMethod::wake_geom_to_string(size_t for_geom)
 Eigen::Vector3d
 PanelMethod::induced_vel_verts(const Matrix<double, 3, 4> &vertices, const Vector3d& normal, const Vector3d &pos)
 {
+	// Ring approach
+	// (Velocity induced by ring vortex)
+	Vector3d out; out.setZero();
+
+	for(Index i = 0; i < 4; i++)
+	{
+		Index ni = i + 1;
+		if(ni == 4)
+			ni = 0;
+		Vector3d pi = vertices.col(i);
+		Vector3d pj = vertices.col(ni);
+		Vector3d ri = pos - pi;
+		Vector3d rj = pos - pj;
+		Vector3d rij = pj - pi;
+
+		Vector3d cr = ri.cross(rj);
+
+		out += cr * rij.dot(ri.normalized() - rj.normalized()) / cr.squaredNorm();
+	}
+
+	out /= 4.0 * M_PI;
+
+	return out;
+	/*
 	// We first of all create the transform matrix that goes from global coordinate
 	// to coordinates in which the z axis is the panel normal, and the x y axes are arbitrary
 	Vector3d center = vertices.col(0).matrix();
@@ -286,7 +310,7 @@ PanelMethod::induced_vel_verts(const Matrix<double, 3, 4> &vertices, const Vecto
 	// Now untransform it, only the rotational component of course
 	out = itform.inverse() * out;
 
-	return out;
+	return out;*/
 }
 
 Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_panel)
@@ -347,19 +371,14 @@ void PanelMethod::compute_cps_smart()
 				num_contrib += 1.0;
 			}
 
-			// Edge trouble!
-			/*if(grad.norm() > 10.0)
-			{
-				grad.setZero();
-			}*/
-
-			// This multiplication kind of fixes edge effects, but gives bad values
-			// Probably a consequence of Kutta-Juokowsky
-			//grad *= get_area(*thin_wings[effect_geom], effect);
 			grad /= num_contrib;
 
 			// c_P = 2 * (P_top - P_bottom) / rho / v_infty^2
-			//     = (v_bottom^2 - v_top^2) / v_infty^2
+			// Now note that by Bernoulli:
+			//     P_top + V_top^2 * rho / 2 = P_infty
+			//     P_bottom + V_bottom^2 * rho / 2 = P_infty
+			// Thus by substitution,
+			//     c_P = (v_bottom^2 - v_top^2) / v_infty^2
 			// But we assume the perturbation velocity is grad, thus
 			//  v_bottom = v_infty - grad
 			//  v_top = v_infty + grad
@@ -368,7 +387,8 @@ void PanelMethod::compute_cps_smart()
 			//  v_top^2 = v_infty^2 + grad^2 + 2*v_infty (dot) grad
 			// Thus the terms simplify and we are left with
 			//  c_P = -4 * v_infty (dot) grad / v_infty^2
-			cps(geom_sizes[effect_geom] + effect) = /*-*/4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+			cps(geom_sizes[effect_geom] + effect) = 2.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+
 		}
 	}
 
@@ -377,9 +397,6 @@ void PanelMethod::compute_cps_smart()
 
 void PanelMethod::compute_cps(double epsilon)
 {
-	// This value requires some fine-tuning for certain geometries
-	// TODO: Better method instead of this brute-force one
-
 	// Panel-on-panel effect
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 	{
@@ -441,6 +458,7 @@ Eigen::Vector3d PanelMethod::compute_aero_force()
 {
 	Vector3d acc; acc.setZero();
 
+
 	for(size_t geom = 0; geom < thin_wings.size(); geom++)
 	{
 		for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
@@ -452,6 +470,21 @@ Eigen::Vector3d PanelMethod::compute_aero_force()
 			acc += force * area;
 		}
 	}
+
+
+	// Center line lift
+
+	/*for(Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
+	{
+		Index idx = thin_wings[0]->num_spanwise / 2 * (thin_wings[0]->num_chorwise - 1) + i;
+		Vector3d nrm =thin_wings[0]->normals.col(idx);
+		double area = get_area(*thin_wings[0], idx);
+		Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(0, idx));
+		Vector3d b = thin_wings[0]->vertices.col(thin_wings[0]->quads(3, idx));
+		double length = (b - a).norm();
+		Vector3d force = nrm * cps(idx);
+		acc += force * length;
+	}*/
 
 	return acc;
 }
@@ -638,11 +671,9 @@ void PanelMethod::compute_cps_smarter()
 			//
 			Vector3d grad = Vector3d(parameters(3), parameters(4), 0.0);
 			grad = tinv * grad;
-			// TODO: Why is this needed?
-			grad *= self_area;
 
-			cps(geom_sizes[effect_geom] + effect) = 4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
-			//cps(geom_sizes[effect_geom] + effect) = grad.norm();
+			// Now,
+			cps(geom_sizes[effect_geom] + effect) = -2.0 * (freestream.dot(grad)) / freestream.squaredNorm();
 		}
 	}
 

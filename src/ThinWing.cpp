@@ -8,7 +8,8 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 									  size_t num_chordwise, size_t num_spanwise, double span, double chord_scale)
 {
 	auto out = std::make_shared<ThinWing>();
-
+	out->num_spanwise = num_spanwise;
+	out->num_chorwise = num_chordwise;
 	assert(num_spanwise > 0);
 	assert(num_chordwise > 0);
 

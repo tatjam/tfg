@@ -8,6 +8,8 @@ class ThinWing : public PlanarGeometry
 {
 public:
 
+	size_t num_chorwise;
+	size_t num_spanwise;
 
 	// Indices of the vertices which build the trailing edge where the wake is shed
 	Eigen::VectorXi trailing_edge;

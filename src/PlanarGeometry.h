@@ -35,7 +35,6 @@ public:
 	// (Use ToExpression[Import["...", "String"]] to import it)
 	std::string normals_to_string(double nrm_scale = 0.5);
 
-
 	void generate_normals();
 
 	PlanarGeometry();
