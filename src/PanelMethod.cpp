@@ -299,6 +299,16 @@ Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_
 	return center;
 }
 
+double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
+{
+	// We approximate the area of the cuadrilateral as two triangles
+	Vector3d v1 = wing.vertices.col(wing.quads(0, panel));
+	Vector3d v2 = wing.vertices.col(wing.quads(1, panel));
+	Vector3d v3 = wing.vertices.col(wing.quads(2, panel));
+	Vector3d v4 = wing.vertices.col(wing.quads(3, panel));
+	return 0.5 * (v2 - v1).cross(v3 - v1).norm() + 0.5 * (v4 - v2).cross(v4 - v3).norm();
+}
+
 void PanelMethod::compute_cps_smart()
 {
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
@@ -313,6 +323,7 @@ void PanelMethod::compute_cps_smart()
 			Vector3d freestream = -body_vel;
 			freestream -= omega.cross(center);
 
+			double num_contrib = 0;
 			for(Index neighbor = 0; neighbor < 8; neighbor++)
 			{
 				// In essence, we compute the solution gradient over the geometry of the wing
@@ -331,13 +342,21 @@ void PanelMethod::compute_cps_smart()
 				//   (\mu_neighbor - \mu_ours)/(distance)
 				// in the direction of the vector joining their centers
 				double mu_neighbor = solution(geom_sizes[effect_geom] + neigh_idx);
-				grad += join * ((mu_ours - mu_neighbor) / dist);
+				grad += join * (mu_neighbor - mu_ours) / dist;
+
+				num_contrib += 1.0;
 			}
 
-			if(grad.norm() > 8.0)
+			// Edge trouble!
+			/*if(grad.norm() > 10.0)
 			{
 				grad.setZero();
-			}
+			}*/
+
+			// This multiplication kind of fixes edge effects, but gives bad values
+			// Probably a consequence of Kutta-Juokowsky
+			//grad *= get_area(*thin_wings[effect_geom], effect);
+			grad /= num_contrib;
 
 			// c_P = 2 * (P_top - P_bottom) / rho / v_infty^2
 			//     = (v_bottom^2 - v_top^2) / v_infty^2
@@ -349,7 +368,7 @@ void PanelMethod::compute_cps_smart()
 			//  v_top^2 = v_infty^2 + grad^2 + 2*v_infty (dot) grad
 			// Thus the terms simplify and we are left with
 			//  c_P = -4 * v_infty (dot) grad / v_infty^2
-			cps(geom_sizes[effect_geom] + effect) = -4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+			cps(geom_sizes[effect_geom] + effect) = /*-*/4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
 		}
 	}
 
@@ -427,12 +446,7 @@ Eigen::Vector3d PanelMethod::compute_aero_force()
 		for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
 		{
 			Vector3d nrm = thin_wings[geom]->normals.col(panel);
-			// We approximate the area of the cuadrilateral as two triangles
-			Vector3d v1 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(0, panel));
-			Vector3d v2 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(1, panel));
-			Vector3d v3 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(2, panel));
-			Vector3d v4 = thin_wings[geom]->vertices.col(thin_wings[geom]->quads(3, panel));
-			double area = 0.5 * (v2 - v1).cross(v3 - v1).norm() + 0.5 * (v4 - v2).cross(v4 - v3).norm();
+			double area = get_area(*thin_wings[geom], panel);
 
 			Vector3d force = nrm * cps(geom_sizes[geom] + panel);
 			acc += force * area;
@@ -501,6 +515,139 @@ PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vecto
 	o << "}";
 	return o.str();
 }
+
+void PanelMethod::compute_cps_smarter()
+{
+	// TODO: This could be improved much by caching weighted averages
+	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
+	{
+		const ThinWing& tw = *thin_wings[effect_geom];
+		for (Index effect = 0; effect < tw.quads.cols(); effect++)
+		{
+			Vector3d center = get_center(tw, effect);
+			Vector3d normal = tw.normals.col(effect);
+
+			// TODO: Signs
+			Vector3d freestream = -body_vel;
+			freestream -= omega.cross(center);
+
+			Array4d areas; areas.setZero();
+			Array4d mus; mus.setZero();
+
+			double self_area = get_area(tw, effect);
+			double self_sol = solution(geom_sizes[effect_geom] + effect);
+
+			// Compute area-weighted average of mu at each node of the quadrilateral,
+			// exploting the mesh structure
+			for(Index vert = 0; vert < 4; vert++)
+			{
+				// Self contribution
+				areas(vert) += self_area;
+				mus(vert) += self_sol * self_area;
+
+				Index vert_idx = tw.quads(vert, effect);
+				for(Index nbor = 0; nbor < 8; nbor++)
+				{
+					Index nbor_idx = tw.neighbors(nbor, effect);
+					if(nbor_idx < 0)
+						continue;
+
+					// Check that the neighbor also contains this vertex
+					// TODO: This is technically not needed in such a structured mesh!
+					bool has_vert = false;
+					for(Index svert = 0; svert < 4; svert++)
+					{
+						Index vidx = tw.quads(svert, nbor_idx);
+						if(vidx == vert_idx)
+						{
+							has_vert = true;
+							break;
+						}
+					}
+
+					if(!has_vert)
+						continue;
+
+					double area = get_area(tw, nbor_idx);
+					areas(vert) += area;
+					mus(vert) += area * solution(geom_sizes[effect_geom] + nbor_idx);
+
+				}
+
+				mus(vert) /= areas(vert);
+			}
+
+			// We know mu at each of the quadrilateral corners, and at its center
+			// For convenience, we will project the quadrilateral into a flat plane,
+			// (assuming it's flat, small error) such that the normal vector points
+			// in the z direction, and the quadrilateral is contained in the x/y plane
+
+			// Because we don't really care about the orientation of x and y, we can simply
+			// use the axis-to-axis rotation quaternion
+			Quaterniond quat; quat.setFromTwoVectors(normal, Vector3d(0, 0, 1));
+			Isometry3d transform; transform.setIdentity();
+
+			Isometry3d tinv = (transform * quat).inverse();
+			// Note that this implies that quat is applied before the translation!
+			transform = transform * quat * Translation3d(-center);
+
+			// Now the center of the quadrilateral is at its origin, and its vertices
+			// can be assumed to lay flat on the plane (up to a good approximation)
+			Matrix<double, 3, 5> ps;
+			ps.col(0) = transform * tw.transform * tw.vertices.col(tw.quads(0, effect));
+			ps.col(1) = transform * tw.transform * tw.vertices.col(tw.quads(1, effect));
+			ps.col(2) = transform * tw.transform * tw.vertices.col(tw.quads(2, effect));
+			ps.col(3) = transform * tw.transform * tw.vertices.col(tw.quads(3, effect));
+			// Center point
+			ps.col(4) = Vector3d(0, 0, 0);
+
+			// We find the best fit for the following conic
+			// phi = Ax^2 + Bxy + Cy^2 + Dx + Ey + F
+			// Which has gradient
+			// (2Ax + By + D, Bx + 2Cy + E)
+			// Thus at the origin (x = 0, y = 0) the gradient is simply
+			// (D, E)
+			// Which can be converted back into 3D by inverse transformation
+			// We use the least squares method to find such fit
+
+			MatrixXd lsq = MatrixXd(5 /*data points*/, 6 /* parameters */);
+			for(Index p = 0; p < 5; p++)
+			{
+				lsq(p, 0) = ps(0, p)*ps(0, p); // Ax^2
+				lsq(p, 1) = ps(0, p)*ps(1, p); // Bxy
+				lsq(p, 2) = ps(1, p)*ps(1, p); // Cy^2
+				lsq(p, 3) = ps(0, p); //Dx
+				lsq(p, 4) = ps(1, p); //Ey
+				lsq(p, 5) = 1.0; // F
+			}
+
+			// Solve the least squares problem (see "Introducción a los métodos numéricos", José Antonio Ezquerro)
+			Vector<double, 5> rhs;
+			for(Index p = 0; p < 4; p++)
+			{
+				rhs(p) = mus(p);
+			}
+			rhs(4) = self_sol;
+
+			// 6x5 * 5x1 = 6x1
+			Vector<double, 6> rhs_t = lsq.transpose() * rhs;
+			// 6x5 * 5x6 = 6x6
+			Matrix<double, 6, 6> A = lsq.transpose() * lsq;
+			Vector<double, 6> parameters = A.fullPivLu().solve(rhs_t);
+
+			//
+			Vector3d grad = Vector3d(parameters(3), parameters(4), 0.0);
+			grad = tinv * grad;
+			// TODO: Why is this needed?
+			grad *= self_area;
+
+			cps(geom_sizes[effect_geom] + effect) = 4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+			//cps(geom_sizes[effect_geom] + effect) = grad.norm();
+		}
+	}
+
+}
+
 
 
 

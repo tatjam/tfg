@@ -40,6 +40,7 @@ private:
 	std::vector<Wake> wakes;
 
 	Eigen::Vector3d get_center(const ThinWing& wing, Eigen::Index panel);
+	double get_area(const ThinWing& wing, Eigen::Index panel);
 
 public:
 
@@ -77,6 +78,8 @@ public:
 	void compute_cps(double epsilon);
 	// Does not directly compute induced velocity, but uses a smarter method
 	void compute_cps_smart();
+	// Same as before but even smarter using node method
+	void compute_cps_smarter();
 
 	// Requires cps to be computed
 	Eigen::Vector3d compute_aero_force();

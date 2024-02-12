@@ -39,7 +39,7 @@ int main()
 		}
 	};
 
-	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 40, 40, 10.0, 4.0);
+	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 20, 20, 10.0, 4.0);
 	//geom->transform.rotate(Eigen::AngleAxisd(-0.06, Eigen::Vector3d(1, 0, 0))); // Angle of attack
 	geom->generate_normals();
 	write_string_to_file("workdir/wing.dat", geom->quads_to_string());
@@ -61,20 +61,21 @@ int main()
 
 	panels.solve();
 
-	//panels.compute_cps(0.7);
-	panels.compute_cps_smart();
+	//panels.compute_cps(1.0);
+	//panels.compute_cps_smart();
+	panels.compute_cps_smarter();
 	std::cout << panels.compute_aero_force() << std::endl;
 	//write_string_to_file("workdir/mat.dat", panels.geometry_matrix_to_string());
 	//write_string_to_file("workdir/dyn_mat.dat", panels.dynamic_matrix_to_string());
 	write_string_to_file("workdir/sln.dat", panels.solution_to_string(0));
 	write_string_to_file("workdir/wake.dat", panels.wake_geom_to_string(0));
 	write_string_to_file("workdir/cps.dat", panels.cps_to_string(0));
-	write_string_to_file("workdir/flowmap.dat", panels.sample_flow_field_to_string(
+	/*write_string_to_file("workdir/flowmap.dat", panels.sample_flow_field_to_string(
 			Eigen::Vector3d(0.0, -0.5, -2.5),
 			Eigen::Vector3d(0, 0, 1),
 			Eigen::Vector3d(0, 1, 0),
 			150,150
-			));
+			));*/
 
 
 }
