@@ -45,33 +45,28 @@ int main()
 	write_string_to_file("workdir/wing.dat", geom->quads_to_string());
 	write_string_to_file("workdir/wing_nrm.dat", geom->normals_to_string());
 
-	std::array<double, 11> vals = {
-			0,1,2,3,4,5,6,7,8,9,10};
-	for(double v : vals)
-	{
-		PanelMethod panels;
-		double AoA = v * M_PI / 180.0;
-		std::cout << "AoA = " << v << std::endl;
-		double fvel = 10.0;
-		panels.body_vel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
-		//panels.body_vel = Eigen::Vector3d(0, 0, -10);
-		panels.omega = Eigen::Vector3d(0, 0, 0);
+	PanelMethod panels;
+	double AoA = 4.0 * M_PI / 180.0;
+	double fvel = 10.0;
+	panels.body_vel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
+	//panels.body_vel = Eigen::Vector3d(0, 0, -10);
+	panels.omega = Eigen::Vector3d(0, 0, 0);
 
-		panels.thin_wings.push_back(geom);
-		panels.shed_initial_wake(10, 0.25);
+	panels.thin_wings.push_back(geom);
+	panels.shed_initial_wake(10, 0.25);
 
-		panels.build_geometry_matrix();
+	panels.build_geometry_matrix();
 
-		panels.build_dynamic_steady();
+	panels.build_dynamic_steady();
 
-		panels.solve();
+	panels.solve();
 
-		panels.compute_cps(0.2);
-		std::cout << panels.compute_aero_force() << std::endl;
-	}
+	//panels.compute_cps(0.7);
+	panels.compute_cps_smart();
+	std::cout << panels.compute_aero_force() << std::endl;
 	//write_string_to_file("workdir/mat.dat", panels.geometry_matrix_to_string());
 	//write_string_to_file("workdir/dyn_mat.dat", panels.dynamic_matrix_to_string());
-/*	write_string_to_file("workdir/sln.dat", panels.solution_to_string(0));
+	write_string_to_file("workdir/sln.dat", panels.solution_to_string(0));
 	write_string_to_file("workdir/wake.dat", panels.wake_geom_to_string(0));
 	write_string_to_file("workdir/cps.dat", panels.cps_to_string(0));
 	write_string_to_file("workdir/flowmap.dat", panels.sample_flow_field_to_string(
@@ -79,7 +74,7 @@ int main()
 			Eigen::Vector3d(0, 0, 1),
 			Eigen::Vector3d(0, 1, 0),
 			150,150
-			));*/
+			));
 
 
 }

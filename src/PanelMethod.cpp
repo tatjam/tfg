@@ -299,6 +299,63 @@ Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_
 	return center;
 }
 
+void PanelMethod::compute_cps_smart()
+{
+	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
+	{
+		for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
+		{
+			Vector3d center = get_center(*thin_wings[effect_geom], effect);
+			Vector3d grad; grad.setZero();
+
+			double mu_ours = solution(geom_sizes[effect_geom] + effect);
+			// TODO: Signs
+			Vector3d freestream = -body_vel;
+			freestream -= omega.cross(center);
+
+			for(Index neighbor = 0; neighbor < 8; neighbor++)
+			{
+				// In essence, we compute the solution gradient over the geometry of the wing
+				Index neigh_idx = thin_wings[effect_geom]->neighbors(neighbor, effect);
+				if(neigh_idx < 0)
+					continue;
+
+				// First approach, simple gradient computation
+				Vector3d ncenter = get_center(*thin_wings[effect_geom], neigh_idx);
+				Vector3d join = ncenter - center;
+				double dist = join.norm();
+				join /= dist;
+
+				// We approximate each directional derivative using the forward difference
+				// such that each neighbor contributes
+				//   (\mu_neighbor - \mu_ours)/(distance)
+				// in the direction of the vector joining their centers
+				double mu_neighbor = solution(geom_sizes[effect_geom] + neigh_idx);
+				grad += join * ((mu_ours - mu_neighbor) / dist);
+			}
+
+			if(grad.norm() > 8.0)
+			{
+				grad.setZero();
+			}
+
+			// c_P = 2 * (P_top - P_bottom) / rho / v_infty^2
+			//     = (v_bottom^2 - v_top^2) / v_infty^2
+			// But we assume the perturbation velocity is grad, thus
+			//  v_bottom = v_infty - grad
+			//  v_top = v_infty + grad
+			// Hence
+			//  v_bottom^2 = v_infty^2 + grad^2 - 2*v_infty (dot) grad
+			//  v_top^2 = v_infty^2 + grad^2 + 2*v_infty (dot) grad
+			// Thus the terms simplify and we are left with
+			//  c_P = -4 * v_infty (dot) grad / v_infty^2
+			cps(geom_sizes[effect_geom] + effect) = -4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+		}
+	}
+
+}
+
+
 void PanelMethod::compute_cps(double epsilon)
 {
 	// This value requires some fine-tuning for certain geometries

@@ -60,27 +60,53 @@ ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)>
 
 	// Generate the rectangles
 	out->quads = Array4Xi(4, (num_spanwise - 1) * (num_chordwise - 1));
+	out->neighbors = ArrayXXi(8, (num_spanwise - 1) * (num_chordwise - 1));
+	out->neighbors.setConstant(-1);
+
 	trail = 0;
 
 	for(size_t xi = 0; xi < num_spanwise - 1; xi++)
 	{
 		for(size_t zi = 0; zi < num_chordwise - 1; zi++)
 		{
+			Index idx = xi * (num_chordwise - 1) + zi;
 			// We consider x going right and z going down for nomenclature
 			// Top left
-			out->quads(0, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi;
+			out->quads(0, idx) = xi * num_chordwise + zi;
 			// Top right
-			out->quads(1, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi;
+			out->quads(1, idx) = (xi + 1) * num_chordwise + zi;
 			// Bottom right
-			out->quads(2, xi * (num_chordwise - 1) + zi) = (xi + 1) * num_chordwise + zi + 1;
+			out->quads(2, idx) = (xi + 1) * num_chordwise + zi + 1;
 			// Bottom left
-			out->quads(3, xi * (num_chordwise - 1) + zi) = xi * num_chordwise + zi + 1;
+			out->quads(3, idx) = xi * num_chordwise + zi + 1;
 
 			if(zi == num_chordwise - 2)
 			{
-				out->trailing_panels(trail) = xi * (num_chordwise - 1) + zi;
+				out->trailing_panels(trail) = idx;
 				trail++;
 			}
+
+			// Neighbor assignment
+			// Direct neighbors (share an edge) (row < 4)
+			if(xi > 0)
+				out->neighbors(0, idx) = (xi - 1) * (num_chordwise - 1) + zi;
+			if(zi > 0)
+				out->neighbors(1, idx) = xi * (num_chordwise - 1) + zi - 1;
+			if(xi < num_spanwise - 2)
+				out->neighbors(2, idx) = (xi + 1) * (num_chordwise - 1) + zi;
+			if(zi < num_chordwise - 2)
+				out->neighbors(3, idx) = xi * (num_chordwise - 1) + zi + 1;
+			// Diagonal neighbors (share only a vertex) (row >= 4)
+			if(xi > 0 && zi > 0)
+				out->neighbors(4, idx) = (xi - 1) * (num_chordwise - 1) + zi - 1;
+			if(xi > 0 && zi < num_chordwise - 2)
+				out->neighbors(5, idx) = (xi - 1) * (num_chordwise - 1) + zi + 1;
+			if(zi > 0 && xi < num_spanwise - 2)
+				out->neighbors(6, idx) = (xi + 1) * (num_chordwise - 1) + zi - 1;
+			if(xi < num_spanwise - 2 && zi < num_chordwise - 2)
+				out->neighbors(7, idx) = (xi + 1) * (num_chordwise - 1) + zi + 1;
+
+
 		}
 	}
 

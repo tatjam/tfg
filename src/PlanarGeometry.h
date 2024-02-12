@@ -19,6 +19,11 @@ public:
 	// WARNING: Make sure to recalculate normals if this changes!
 	Eigen::Affine3d transform;
 
+	// Neighbor for each quad, in arbitrary directions
+	// (We define neighbor as sharing a vertex)
+	// Maximum of 8 neighbors per element, empty neighbors are marked (-1)
+	Eigen::ArrayXXi neighbors;
+
 
 	// Export Mathematica list of vertices that can be readily
 	// parsed by Polygon to display in 3D

@@ -73,7 +73,11 @@ public:
 	// Same as before but for pressure coefficients
 	std::string cps_to_string(size_t for_geom);
 
+	// Brute force method that depends greatly on choice of epsilon
 	void compute_cps(double epsilon);
+	// Does not directly compute induced velocity, but uses a smarter method
+	void compute_cps_smart();
+
 	// Requires cps to be computed
 	Eigen::Vector3d compute_aero_force();
 
