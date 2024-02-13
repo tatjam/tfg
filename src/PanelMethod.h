@@ -37,12 +37,12 @@ private:
 	void build_dynamic_matrix_steady();
 	void build_rhs();
 
-	std::vector<Wake> wakes;
 
 	Eigen::Vector3d get_center(const ThinWing& wing, Eigen::Index panel);
 	double get_area(const ThinWing& wing, Eigen::Index panel);
 
 public:
+	std::vector<Wake> wakes;
 
 	// In body coordinates, which means that incoming airflow
 	// is constant regardless of omega

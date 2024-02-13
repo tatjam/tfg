@@ -40,7 +40,7 @@ int main()
 		 */
 	};
 
-	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 64, 32, 4.0, 1.0);
+	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 16, 16, 4.0, 1.0);
 	//geom->transform.rotate(Eigen::AngleAxisd(-0.06, Eigen::Vector3d(1, 0, 0))); // Angle of attack
 	geom->generate_normals();
 	write_string_to_file("workdir/wing.dat", geom->quads_to_string());
@@ -48,13 +48,18 @@ int main()
 
 	PanelMethod panels;
 	double AoA = 10.0 * M_PI / 180.0;
-	double fvel = 100.0;
+	double fvel = 10.0;
 	panels.body_vel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
 	//panels.body_vel = Eigen::Vector3d(0, 0, -10);
 	panels.omega = Eigen::Vector3d(0, 0, 0);
 
 	panels.thin_wings.push_back(geom);
 	panels.shed_initial_wake(100, 0.01);
+
+	for(size_t i = 1; i < 50; i++)
+	{
+		panels.wakes[0].timestep(*panels.thin_wings[0], 0.01, Eigen::Vector3d(0, 0, -fvel), Eigen::Vector3d(0, 0, 0));
+	}
 
 	panels.build_geometry_matrix();
 

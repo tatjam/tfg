@@ -33,33 +33,17 @@ void Wake::shed_from(const ThinWing &wing, double wake_scale, Eigen::Index nnum_
 	double omega_length = omega.norm();
 	Vector3d omega_norm = omega / omega_length;
 
+	pos_history.reserve(num_edges - 1);
+	orient_history.reserve(num_edges - 1);
+
 	for(Index zi = 1; zi < num_edges; zi++)
 	{
-		// This is kind of "velocity" cosine sampling
-		double progress = (double)zi / (double)(num_edges - 1);
-		//double pos = 1.0 - std::cos(M_PI * progress * 0.5);
-		// This is kind of like a "time-step", that increases further away from the body
-		double speed = std::sin(M_PI * progress * 0.5);
-
-		// Integrate velocity
-		Vector3d inertial_vel = body_orient * body_vel;
-		body_pos -= inertial_vel * speed * wake_scale;
-		//body_pos += -(body_vel - omega.cross(body_pos)) * speed * wake_scale;
-
-		// Integrate rotation
-		if(omega_length > 0.0)
-		{
-			body_orient = body_orient.rotate(AngleAxisd(-omega_length * speed * wake_scale, omega_norm));
-		}
-
-		for(Index xi = 0; xi < num_trailing_edge; xi++)
-		{
-			Vector3d vertex_pos = wing.transform * wing.vertices.col(wing.trailing_edge(xi)).matrix();
-			Vector3d rotated = body_orient * vertex_pos;
-			Vector3d rel_pos = body_pos + rotated;
-			vertices.col(xi * num_edges + zi) = rel_pos;
-		}
+		vel_history.push_back(body_vel);
+		angvel_history.push_back(omega);
 	}
+
+	integrate_velocities(wake_scale);
+	build_from_history(wing);
 
 	// Generate the rectangles, same as for the wing
 	quads = Array4Xi(4, (num_trailing_edge - 1) * (num_edges - 1));
@@ -77,3 +61,94 @@ void Wake::shed_from(const ThinWing &wing, double wake_scale, Eigen::Index nnum_
 
 	generate_normals();
 }
+
+void Wake::timestep(const ThinWing &wing, double wake_scale, const Vector3d &body_vel, const Vector3d &omega)
+{
+	// Pop-out oldest velocity profile
+	vel_history.pop_back();
+	angvel_history.pop_back();
+
+	// Push new velocity profile
+	vel_history.push_front(body_vel);
+	angvel_history.push_front(omega);
+
+
+	integrate_velocities(wake_scale);
+	build_from_history(wing);
+	generate_normals();
+}
+
+void Wake::integrate_velocities(double wake_scale)
+{
+	pos_history.clear();
+	orient_history.clear();
+
+	Vector3d body_pos; body_pos.setZero();
+	Isometry3d body_orient; body_orient.setIdentity();
+
+	// Note that first edge is trailing edge!
+	for(Index zi = 1; zi < num_edges; zi++)
+	{
+		double progress = (double)zi / (double)(num_edges - 1);
+		double arr_progress = (double)(zi - 1) / (double)(num_edges - 1);
+
+		double pos = 1.0 - std::cos(M_PI * arr_progress * 0.5);
+
+		double speed = std::sin(M_PI * progress * 0.5);
+
+		// Interpolated sampling for history
+		// TODO: Maybe higher than linear is good?
+		double array_prog = pos * (double)(num_edges - 1);
+		double step = 1.0 / (double)(num_edges - 1);
+		Index prog_sup = (size_t)(std::ceil(array_prog));
+		Index prog_inf = (size_t)(std::floor(array_prog));
+		double fac_sup =  array_prog - (double)prog_inf;
+		double fac_inf = 1.0 - fac_sup;
+
+		Vector3d vel = vel_history[prog_sup] * fac_sup + vel_history[prog_inf] * fac_inf;
+		Vector3d omega = angvel_history[prog_sup] * fac_sup + angvel_history[prog_inf] * fac_inf;
+
+		// Integrate velocity
+		Vector3d inertial_vel = body_orient * vel;
+		body_pos -= inertial_vel * speed * wake_scale;
+
+		double omega_length = omega.norm();
+		Vector3d omega_norm = omega / omega_length;
+
+		// Integrate rotation
+		if(omega_length > 0.0)
+		{
+			body_orient = body_orient.rotate(AngleAxisd(-omega_length * speed * wake_scale, omega_norm));
+		}
+
+		pos_history.push_back(body_pos);
+		orient_history.push_back(body_orient);
+	}
+}
+
+void Wake::build_from_history(const ThinWing &wing)
+{
+	size_t num_trailing_edge = wing.trailing_edge.rows();
+	// We start at the last stored time-step and progress forwards
+	for(Index zi = 1; zi < num_edges; zi++)
+	{
+		// This is kind of "velocity" cosine sampling
+		double progress = (double)zi / (double)(num_edges - 1);
+		//double pos = 1.0 - std::cos(M_PI * progress * 0.5);
+		// This is kind of like a "time-step", that increases further away from the body
+		double speed = std::sin(M_PI * progress * 0.5);
+
+		Vector3d body_pos = pos_history[zi - 1];
+		Isometry3d body_orient = orient_history[zi - 1];
+
+		for(Index xi = 0; xi < num_trailing_edge; xi++)
+		{
+			Vector3d vertex_pos = wing.transform * wing.vertices.col(wing.trailing_edge(xi)).matrix();
+			Vector3d rotated = body_orient * vertex_pos;
+			Vector3d rel_pos = body_pos + rotated;
+			vertices.col(xi * num_edges + zi) = rel_pos;
+		}
+	}
+
+}
+
