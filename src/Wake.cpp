@@ -31,12 +31,6 @@ void Wake::build_initial_geometry(const ThinWing &wing, const PanelMethod &metho
 
 }
 
-void Wake::timestep(const ThinWing &wing, const PanelMethod& panels)
-{
-	build_from_history(wing, panels);
-	generate_normals();
-}
-
 void Wake::build_from_history(const ThinWing &wing, const PanelMethod& panels)
 {
 	size_t num_trailing_edge = wing.trailing_edge.rows();
@@ -58,6 +52,80 @@ void Wake::build_from_history(const ThinWing &wing, const PanelMethod& panels)
 			Vector3d rotated = body_orient * vertex_pos;
 			Vector3d rel_pos = body_pos + rotated;
 			vertices.col(xi * panels.num_wake_edges + zi) = rel_pos;
+		}
+	}
+
+	generate_normals();
+
+}
+
+void Wake::inherit_solution(size_t wake_idx, const PanelMethod &method)
+{
+	size_t num_trailing_edge = method.thin_wings[wake_idx]->trailing_panels.rows();
+	mus = ArrayXd(quads.cols());
+	influences = ArrayXd(quads.cols());
+
+	ArrayXd stat_sample(num_trailing_edge);
+
+	// Initial values don't need any advanced computation
+	for(size_t xi = 0; xi < num_trailing_edge; xi++)
+	{
+		Index trail_panel = method.thin_wings[wake_idx]->trailing_panels(xi);
+		double val = method.solution(method.geom_sizes[wake_idx] + trail_panel);
+		stat_sample(xi) = val;
+		for(size_t zi = 0; zi < method.num_wake_edges - 1; zi++)
+		{
+			mus(xi * (method.num_wake_edges - 1) + zi) = val;
+			influences(xi * (method.num_wake_edges - 1) + zi) = 0.0;
+		}
+	}
+
+	// Initial flat history
+	for(size_t zi = 1; zi < method.num_wake_edges; zi++)
+	{
+		mu_history.push_back(stat_sample);
+	}
+
+}
+
+void Wake::mu_convect(size_t wake_idx, const PanelMethod &method)
+{
+	size_t num_trailing_edge = method.thin_wings[wake_idx]->trailing_panels.rows();
+	for(Index zi = 1; zi < method.num_wake_edges; zi++)
+	{
+		double progress = (double)zi / (double)(method.num_wake_edges - 1);
+		double arr_progress = (double)(zi - 1) / (double)(method.num_wake_edges - 1);
+
+		double pos = 1.0 - std::cos(M_PI * arr_progress * 0.5);
+
+		double speed = std::sin(M_PI * progress * 0.5);
+
+		// Interpolated sampling for history
+		// TODO: This could REALLY benefit from smoother interp
+		double array_prog = pos * (double)(method.num_wake_edges - 1);
+		double step = 1.0 / (double)(method.num_wake_edges - 1);
+		Index prog_sup = (size_t)(std::ceil(array_prog));
+		Index prog_inf = (size_t)(std::floor(array_prog));
+		double fac_sup =  array_prog - (double)prog_inf;
+		double fac_inf = 1.0 - fac_sup;
+
+		for(Index xi = 0; xi < num_trailing_edge; xi++)
+		{
+			double mu = 0.0;
+
+			double influence = 0.0;
+			if(prog_inf == 0)
+			{
+				influence += fac_inf;
+				mu = mu_history[prog_sup](xi) * fac_sup;
+			}
+			else
+			{
+				mu = mu_history[prog_sup](xi) * fac_sup + mu_history[prog_inf](xi) * fac_inf;
+			}
+
+			mus(xi * (method.num_wake_edges - 1) + zi - 1) = mu;
+			influences(xi * (method.num_wake_edges - 1) + zi - 1) = influence;
 		}
 	}
 

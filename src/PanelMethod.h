@@ -4,7 +4,8 @@
 
 class PanelMethod
 {
-private:
+	friend class Wake;
+protected:
 
 	// This matrix doesn't include influence of dynamic elements (wakes for now)
 	//  An element of the matrix (effect, cause) represents
@@ -30,13 +31,18 @@ private:
 	// Return the normal projected induced velocity vector at effect panel caused by cause panel, which would be scaled
 	// by "mu" (the doublet strength) to obtain the real induced normal velocity
 	Eigen::Vector3d induced_vel(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel);
-	Eigen::Vector3d induced_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel);
+	// MODE = 0 -> Returns induced velocity for steady mode
+	// MODE = 1 -> Returns induced velocity multiplied by wake.influence
+	// MODE = 2 -> Returns induced velocity multiplied by wake.mus
+	Eigen::Vector3d induced_vel_wake(
+			const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel,
+			const int MODE);
 	double induced_norm_vel(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel);
-	double induced_norm_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel);
 
-	void build_dynamic_matrix_steady();
-	void build_rhs();
-
+	double induced_norm_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect,
+								 Eigen::Index effect_panel, const bool STEADY);
+	void build_dynamic_matrix(const bool STEADY);
+	void build_rhs(const bool STEADY);
 
 	Eigen::Vector3d get_center(const ThinWing& wing, Eigen::Index panel);
 	double get_area(const ThinWing& wing, Eigen::Index panel);
@@ -58,7 +64,8 @@ public:
 	std::deque<Eigen::Vector3d> angvel_history;
 
 	Eigen::Vector3d induced_vel(const ThinWing& cause, Eigen::Index cause_panel, const Eigen::Vector3d& pos);
-	Eigen::Vector3d induced_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const Eigen::Vector3d& pos);
+	Eigen::Vector3d induced_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const Eigen::Vector3d& pos,
+									 const int MODE);
 	Eigen::Vector3d induced_vel_verts(const Eigen::Matrix<double, 3, 4>& vertices,
 									  const Eigen::Vector3d& nrm,
 									  const Eigen::Vector3d& pos);
@@ -73,11 +80,12 @@ public:
 	void shed_initial_wake(Eigen::Index num_wake_edges, double wake_scale,
 						   const Eigen::Vector3d& body_vel, const Eigen::Vector3d& body_angvel);
 
+	// Meant to be used after steady solution to have an starting point for
+	// wake convection
+	void transfer_solution_to_wake();
+
 	// Builds the dynamic matrix and RHS matrix
-	// Uses wake convection
-	void build_dynamic();
-	// Same as before but assumes steady condition and thus fixed wake
-	void build_dynamic_steady();
+	void build_dynamic(const bool STEADY);
 
 	std::string geometry_matrix_to_string();
 	std::string dynamic_matrix_to_string();

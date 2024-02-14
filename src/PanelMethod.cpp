@@ -47,13 +47,14 @@ Eigen::Vector3d PanelMethod::induced_vel(const ThinWing &cause, Eigen::Index cau
 }
 
 Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
-											  Eigen::Index effect_panel)
+											  Eigen::Index effect_panel, const int MODE)
 {
 	Vector3d center = get_center(effect, effect_panel);
-	return induced_vel_wake(wake, cause_trailing, center);
+	return induced_vel_wake(wake, cause_trailing, center, MODE);
 }
 
-Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos)
+Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos,
+											  const int MODE)
 {
 	Vector3d acc = Vector3d(0, 0, 0);
 	for(Index i = 0; i < num_wake_edges - 1; i++)
@@ -81,9 +82,11 @@ PanelMethod::induced_norm_vel(const ThinWing& cause, Index cause_panel, const Th
 }
 
 double PanelMethod::induced_norm_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
-										  Eigen::Index effect_panel)
+										  Eigen::Index effect_panel, const bool STEADY)
 {
-	Vector3d acc = induced_vel_wake(wake, cause_trailing, effect, effect_panel);
+	// 0 = STEADY mode, 1 = Multiply by influence
+	Vector3d acc = induced_vel_wake(wake, cause_trailing, effect, effect_panel,
+													STEADY ? 0 : 1);
 	Vector3d normal = effect.normals.col(effect_panel).matrix();
 	return acc.dot(normal);
 }
@@ -105,7 +108,7 @@ Eigen::Vector3d PanelMethod::induced_vel(const ThinWing &cause, Index cause_pane
 	return induced_vel_verts(verts, nrm, pos);
 }
 
-void PanelMethod::build_rhs()
+void PanelMethod::build_rhs(const bool STEADY)
 {
 	for(size_t geom = 0; geom < thin_wings.size(); geom++)
 	{
@@ -117,7 +120,7 @@ void PanelMethod::build_rhs()
 	}
 }
 
-void PanelMethod::build_dynamic_matrix_steady()
+void PanelMethod::build_dynamic_matrix(const bool STEADY)
 {
 	// We simply prescribe the same circulation to the wake than in the trailing
 	// edge panels, thus the wake become "integrated" into the contribution
@@ -133,7 +136,8 @@ void PanelMethod::build_dynamic_matrix_steady()
 				{
 					Index cause = thin_wings[cause_geom]->trailing_panels(cause_trail);
 
-					double induced = induced_norm_vel_wake(wakes[cause_geom], cause_trail, *thin_wings[effect_geom], effect);
+					double induced = induced_norm_vel_wake(wakes[cause_geom], cause_trail,
+																   *thin_wings[effect_geom], effect, STEADY);
 					auto effect_idx = (Index)(effect + geom_sizes[effect_geom]);
 					auto cause_idx = (Index)(cause + geom_sizes[cause_geom]);
 
@@ -142,23 +146,12 @@ void PanelMethod::build_dynamic_matrix_steady()
 			}
 		}
 	}
-
-
-
-
 }
 
-void PanelMethod::build_dynamic_steady()
+void PanelMethod::build_dynamic(const bool STEADY)
 {
-	build_rhs();
-	build_dynamic_matrix_steady();
-
-}
-
-
-void PanelMethod::build_dynamic()
-{
-
+	build_dynamic_matrix(STEADY);
+	build_rhs(STEADY);
 }
 
 std::string PanelMethod::geometry_matrix_to_string()
@@ -226,6 +219,7 @@ void PanelMethod::shed_initial_wake(Eigen::Index num_wake_edges, double wake_sca
 	{
 		Wake& w = wakes.emplace_back();
 		w.build_initial_geometry(*wing, *this);
+		w.build_from_history(*wing, *this);
 	}
 
 
@@ -262,73 +256,6 @@ PanelMethod::induced_vel_verts(const Matrix<double, 3, 4> &vertices, const Vecto
 	out /= 4.0 * M_PI;
 
 	return out;
-	/*
-	// We first of all create the transform matrix that goes from global coordinate
-	// to coordinates in which the z axis is the panel normal, and the x y axes are arbitrary
-	Vector3d center = vertices.col(0).matrix();
-	center += vertices.col(1).matrix();
-	center += vertices.col(2).matrix();
-	center += vertices.col(3).matrix();
-	center /= 4.0;
-
-	// Because we don't really care about the orientation of x and y, we can simply
-	// use the axis-to-axis rotation quaternion
-	Quaterniond quat; quat.setFromTwoVectors(normal, Vector3d(0, 0, 1));
-	Isometry3d transform; transform.setIdentity();
-
-	// Note that this implies that quat is applied before the translation!
-	transform = transform * quat * Translation3d(-center);
-
-	Vector3d p = transform * pos;
-
-	// Vertices in new coordinate system
-	Vector3d p1 = transform * vertices.col(0);
-	Vector3d p2 = transform * vertices.col(1);
-	Vector3d p3 = transform * vertices.col(2);
-	Vector3d p4 = transform * vertices.col(3);
-
-	double r1 = (p1 - p).norm();
-	double r2 = (p2 - p).norm();
-	double r3 = (p3 - p).norm();
-	double r4 = (p4 - p).norm();
-
-	Vector3d out;
-
-	// WARNING: There's an errata in the bibliography, which states that
-	// the denominators contain a substraction instead of addition (ie, r1 * r2 - (...)) instead of what's given!
-	double den1 =
-			(r1 * r2 * (r1 * r2 + ((p(0) - p1(0)) * (p(0) - p2(0)) + (p(1) - p1(1)) * (p(1) - p2(1)) + p(2) * p(2))));
-	double den2 =
-			(r2 * r3 * (r2 * r3 + ((p(0) - p2(0)) * (p(0) - p3(0)) + (p(1) - p2(1)) * (p(1) - p3(1)) + p(2) * p(2))));
-	double den3 =
-			(r3 * r4 * (r3 * r4 + ((p(0) - p3(0)) * (p(0) - p4(0)) + (p(1) - p3(1)) * (p(1) - p4(1)) + p(2) * p(2))));
-	double den4 =
-			(r4 * r1 * (r4 * r1 + ((p(0) - p4(0)) * (p(0) - p1(0)) + (p(1) - p4(1)) * (p(1) - p1(1)) + p(2) * p(2))));
-
-	out(0) = p(2) * (p1(1) - p2(1)) * (r1 + r2) / den1;
-	out(0) += p(2) * (p2(1) - p3(1)) * (r2 + r3) / den2;
-	out(0) += p(2) * (p3(1) - p4(1)) * (r3 + r4) / den3;
-	out(0) += p(2) * (p4(1) - p1(1)) * (r4 + r1) / den4;
-	out(0) /= 4.0 * M_PI;
-
-	out(1) = -p(2) * (p1(0) - p2(0)) * (r1 + r2) / den1;
-	out(1) -= p(2) * (p2(0) - p3(0)) * (r2 + r3) / den2;
-	out(1) -= p(2) * (p3(0) - p4(0)) * (r3 + r4) / den3;
-	out(1) -= p(2) * (p4(0) - p1(0)) * (r4 + r1) / den4;
-	out(1) /= 4.0 * M_PI;
-
-	out(2) = ((p(0) - p2(0)) * (p(1) - p1(1)) - (p(0) - p1(0)) * (p(1) - p2(1))) * (r1 + r2) / den1;
-	out(2) += ((p(0) - p3(0)) * (p(1) - p2(1)) - (p(0) - p2(0)) * (p(1) - p3(1))) * (r2 + r3) / den2;
-	out(2) += ((p(0) - p4(0)) * (p(1) - p3(1)) - (p(0) - p3(0)) * (p(1) - p4(1))) * (r3 + r4) / den3;
-	out(2) += ((p(0) - p1(0)) * (p(1) - p4(1)) - (p(0) - p4(0)) * (p(1) - p1(1))) * (r4 + r1) / den4;
-	out(2) /= 4.0 * M_PI;
-
-	Isometry3d itform; itform.setIdentity();
-	itform = itform * quat;
-	// Now untransform it, only the rotational component of course
-	out = itform.inverse() * out;
-
-	return out;*/
 }
 
 Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_panel)
@@ -419,8 +346,8 @@ PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vecto
 				// Wake effect
 				for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
 				{
-					Vector3d ind = induced_vel_wake(wakes[cause_geom], trail_cause, pos);
-					ind *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
+					Vector3d ind = induced_vel_wake(wakes[cause_geom], trail_cause, pos, 2);
+					// NOTE: Mode 2 already premultiplies by the correct mu value
 					total_ind += ind;
 				}
 			}
@@ -640,6 +567,8 @@ void PanelMethod::integrate_velocities(double wake_scale)
 
 void PanelMethod::timestep(const Vector3d &cur_vel, const Vector3d &cur_angvel)
 {
+	// Rebuild wake
+
 	// Pop-out oldest velocity profile
 	vel_history.pop_back();
 	angvel_history.pop_back();
@@ -652,15 +581,22 @@ void PanelMethod::timestep(const Vector3d &cur_vel, const Vector3d &cur_angvel)
 
 	for(size_t i = 0; i < thin_wings.size(); i++)
 	{
-		wakes[i].timestep(*thin_wings[i], *this);
+		// Transfer new wake geometry
+		wakes[i].build_from_history(*thin_wings[i], *this);
+		// Convect mus and build new influence coefficients
+		wakes[i].mu_convect(i, *this);
 	}
+
+	build_dynamic(false);
+	solve();
 
 }
 
+void PanelMethod::transfer_solution_to_wake()
+{
+	for(size_t i = 0; i < wakes.size(); i++)
+	{
+		wakes[i].inherit_solution(i, *this);
+	}
 
-
-
-
-
-
-
+}
