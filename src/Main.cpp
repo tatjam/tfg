@@ -49,25 +49,26 @@ int main()
 	PanelMethod panels;
 	double AoA = 10.0 * M_PI / 180.0;
 	double fvel = 10.0;
-	panels.body_vel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
-	//panels.body_vel = Eigen::Vector3d(0, 0, -10);
-	panels.omega = Eigen::Vector3d(0, 0, 0);
+	Eigen::Vector3d vinf = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
+	Eigen::Vector3d omega = Eigen::Vector3d(0, 0, 0);
 
 	panels.thin_wings.push_back(geom);
-	panels.shed_initial_wake(100, 0.01);
+	panels.shed_initial_wake(100, 0.01, vinf, omega);
 
-	for(size_t i = 1; i < 50; i++)
+	double t = 0.0;
+	for(size_t i = 1; i < 100; i++)
 	{
-		panels.wakes[0].timestep(*panels.thin_wings[0], 0.01, Eigen::Vector3d(0, 0, -fvel), Eigen::Vector3d(0, 0, 0));
+		panels.timestep(Eigen::Vector3d(std::cos(6.0 * t) * 4.0, std::sin(3.0 * t) * 2.0, -10.0),
+								 Eigen::Vector3d(std::cos(t) * 14.0, 0, std::cos(2.0 * t) * 10.0));
+		t += 0.2;
 	}
-
 	panels.build_geometry_matrix();
 
 	panels.build_dynamic_steady();
 
 	panels.solve();
 	//panels.compute_cps_smart();
-	panels.compute_cps_smarter();
+	panels.compute_cps();
 	//std::cout << panels.compute_aero_force() / (40.0 * 4.0) << std::endl;
 	std::cout << panels.compute_aero_force() / (4.0 * 1.0) << std::endl;
 	//panels.compute_cps(0.5);

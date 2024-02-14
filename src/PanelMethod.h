@@ -41,14 +41,21 @@ private:
 	Eigen::Vector3d get_center(const ThinWing& wing, Eigen::Index panel);
 	double get_area(const ThinWing& wing, Eigen::Index panel);
 
+	void integrate_velocities(double wake_scale);
+	void build_wakes_from_history();
+
 public:
 	std::vector<Wake> wakes;
 
-	// In body coordinates, which means that incoming airflow
-	// is constant regardless of omega
-	Eigen::Vector3d body_vel;
-	// Omega is assumed to be rotation around the origin, in body axes!
-	Eigen::Vector3d omega;
+	double wake_scale;
+	// NOTE: Includes trailing edge panel (which is always fixed!)
+	Eigen::Index num_wake_edges;
+
+	std::vector<Eigen::Vector3d> pos_history;
+	std::vector<Eigen::Isometry3d> orient_history;
+
+	std::deque<Eigen::Vector3d> vel_history;
+	std::deque<Eigen::Vector3d> angvel_history;
 
 	Eigen::Vector3d induced_vel(const ThinWing& cause, Eigen::Index cause_panel, const Eigen::Vector3d& pos);
 	Eigen::Vector3d induced_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const Eigen::Vector3d& pos);
@@ -60,7 +67,12 @@ public:
 
 	void build_geometry_matrix();
 
-	void shed_initial_wake(Eigen::Index num_wake_panels, double wake_distance);
+	// This "resets" all wakes to stationary condition,
+	// potentially resizing vertex counts (all wakes must have same panel count)
+	// num_wake_edges includes trailing edge!
+	void shed_initial_wake(Eigen::Index num_wake_edges, double wake_scale,
+						   const Eigen::Vector3d& body_vel, const Eigen::Vector3d& body_angvel);
+
 	// Builds the dynamic matrix and RHS matrix
 	// Uses wake convection
 	void build_dynamic();
@@ -74,12 +86,9 @@ public:
 	// Same as before but for pressure coefficients
 	std::string cps_to_string(size_t for_geom);
 
-	// Brute force method that depends greatly on choice of epsilon
-	void compute_cps(double epsilon);
-	// Does not directly compute induced velocity, but uses a smarter method
-	void compute_cps_smart();
-	// Same as before but even smarter using node method
-	void compute_cps_smarter();
+	void compute_cps();
+
+	void timestep(const Eigen::Vector3d& cur_vel, const Eigen::Vector3d& cur_angvel);
 
 	// Requires cps to be computed
 	Eigen::Vector3d compute_aero_force();

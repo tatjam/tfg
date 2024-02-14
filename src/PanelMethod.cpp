@@ -56,10 +56,10 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos)
 {
 	Vector3d acc = Vector3d(0, 0, 0);
-	for(Index i = 0; i < wake.num_edges - 1; i++)
+	for(Index i = 0; i < num_wake_edges - 1; i++)
 	{
 		Matrix<double, 3, 4> verts;
-		Index cause_panel = cause_trailing * (wake.num_edges - 1) + i;
+		Index cause_panel = cause_trailing * (num_wake_edges - 1) + i;
 		verts.col(0) = wake.vertices.col(wake.quads(0, cause_panel));
 		verts.col(1) = wake.vertices.col(wake.quads(1, cause_panel));
 		verts.col(2) = wake.vertices.col(wake.quads(2, cause_panel));
@@ -112,7 +112,7 @@ void PanelMethod::build_rhs()
 		for(size_t panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
 		{
 			Vector3d norm = thin_wings[geom]->normals.col(panel);
-			rhs(panel + geom_sizes[geom], 0) = norm.dot(body_vel);
+			rhs(panel + geom_sizes[geom], 0) = norm.dot(vel_history.front());
 		}
 	}
 }
@@ -190,9 +190,6 @@ std::string PanelMethod::cps_to_string(size_t for_geom)
 
 PanelMethod::PanelMethod()
 {
-	body_vel = Vector3d(0, 0, 1);
-	omega = Vector3d(0, 0, 0);
-
 }
 
 void PanelMethod::solve()
@@ -201,15 +198,36 @@ void PanelMethod::solve()
 
 }
 
-void PanelMethod::shed_initial_wake(Eigen::Index num_wake_panels, double wake_distance)
+void PanelMethod::shed_initial_wake(Eigen::Index num_wake_edges, double wake_scale,
+									const Vector3d& body_vel, const Vector3d& omega)
 {
-	wakes.clear();
+	this->num_wake_edges = num_wake_edges;
+	this->wake_scale = wake_scale;
+	// State vector
+	vel_history.clear();
+	angvel_history.clear();
 
+	pos_history.clear();
+	orient_history.clear();
+
+	pos_history.reserve(num_wake_edges - 1);
+	orient_history.reserve(num_wake_edges - 1);
+
+	for(Index zi = 1; zi < num_wake_edges; zi++)
+	{
+		vel_history.push_back(body_vel);
+		angvel_history.push_back(omega);
+	}
+	integrate_velocities(wake_scale);
+
+	// (Re)create wakes
+	wakes.clear();
 	for(const auto& wing : thin_wings)
 	{
 		Wake& w = wakes.emplace_back();
-		w.shed_from(*wing, wake_distance, num_wake_panels, body_vel, omega);
+		w.build_initial_geometry(*wing, *this);
 	}
+
 
 }
 
@@ -333,127 +351,6 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 	return 0.5 * (v2 - v1).cross(v3 - v1).norm() + 0.5 * (v4 - v2).cross(v4 - v3).norm();
 }
 
-void PanelMethod::compute_cps_smart()
-{
-	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
-	{
-		for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
-		{
-			Vector3d center = get_center(*thin_wings[effect_geom], effect);
-			Vector3d grad; grad.setZero();
-
-			double mu_ours = solution(geom_sizes[effect_geom] + effect);
-			// TODO: Signs
-			Vector3d freestream = -body_vel;
-			freestream -= omega.cross(center);
-
-			double num_contrib = 0;
-			for(Index neighbor = 0; neighbor < 8; neighbor++)
-			{
-				// In essence, we compute the solution gradient over the geometry of the wing
-				Index neigh_idx = thin_wings[effect_geom]->neighbors(neighbor, effect);
-				if(neigh_idx < 0)
-					continue;
-
-				// First approach, simple gradient computation
-				Vector3d ncenter = get_center(*thin_wings[effect_geom], neigh_idx);
-				Vector3d join = ncenter - center;
-				double dist = join.norm();
-				join /= dist;
-
-				// We approximate each directional derivative using the forward difference
-				// such that each neighbor contributes
-				//   (\mu_neighbor - \mu_ours)/(distance)
-				// in the direction of the vector joining their centers
-				double mu_neighbor = solution(geom_sizes[effect_geom] + neigh_idx);
-				grad += join * (mu_neighbor - mu_ours) / dist;
-
-				num_contrib += 1.0;
-			}
-
-			grad /= num_contrib;
-
-			// c_P = 2 * (P_top - P_bottom) / rho / v_infty^2
-			// Now note that by Bernoulli:
-			//     P_top + V_top^2 * rho / 2 = P_infty
-			//     P_bottom + V_bottom^2 * rho / 2 = P_infty
-			// Thus by substitution,
-			//     c_P = (v_bottom^2 - v_top^2) / v_infty^2
-			// But we assume the perturbation velocity is grad, thus
-			//  v_bottom = v_infty - grad
-			//  v_top = v_infty + grad
-			// Hence
-			//  v_bottom^2 = v_infty^2 + grad^2 - 2*v_infty (dot) grad
-			//  v_top^2 = v_infty^2 + grad^2 + 2*v_infty (dot) grad
-			// Thus the terms simplify and we are left with
-			//  c_P = -4 * v_infty (dot) grad / v_infty^2
-			cps(geom_sizes[effect_geom] + effect) = 2.0 * (freestream.dot(grad)) / freestream.squaredNorm();
-
-		}
-	}
-
-}
-
-
-void PanelMethod::compute_cps(double epsilon)
-{
-	// Panel-on-panel effect
-	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
-	{
-			for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
-			{
-				Vector3d center = get_center(*thin_wings[effect_geom], effect);
-				// TODO: Signs
-				Vector3d freestream = -body_vel;
-				freestream -= omega.cross(center);
-				Vector3d total_ind_top; total_ind_top.setZero();
-				Vector3d total_ind_bottom; total_ind_bottom.setZero();
-
-				Vector3d normal = thin_wings[effect_geom]->normals.col(effect);
-				Vector3d above = center + normal * epsilon;
-				Vector3d below = center - normal * epsilon;
-
-				for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
-				{
-					// Panel-on-panel
-					for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
-					{
-						Vector3d ind_top = induced_vel(*thin_wings[cause_geom], cause, above);
-						ind_top *= solution(geom_sizes[cause_geom] + cause);
-						Vector3d ind_bottom = induced_vel(*thin_wings[cause_geom], cause, below);
-						ind_bottom *= solution(geom_sizes[cause_geom] + cause);
-						total_ind_top += ind_top;
-						total_ind_bottom += ind_bottom;
-					}
-					// Wake-on-panel effect
-					for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
-					{
-						Vector3d tangential_top = induced_vel_wake(wakes[cause_geom], trail_cause, above);
-						tangential_top *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
-						Vector3d tangential_bottom = induced_vel_wake(wakes[cause_geom], trail_cause, below);
-						tangential_bottom *= solution(geom_sizes[cause_geom] + thin_wings[cause_geom]->trailing_panels(trail_cause));
-						total_ind_top += tangential_top;
-						total_ind_bottom += tangential_bottom;
-					}
-				}
-
-
-				// Thus by applying Bernouilli we arrive at the following expression
-				// Thus 2 * (P_top - P_bottom) / rho = v_bottom^2 - v_top^2
-				// By the definition of c_P
-				// c_P = 2 * (P_top - P_bottom) / rho / v_infty^2
-				//     = (v_bottom^2 - v_top^2) / v_infty^2
-				// Where the bottom and superior terms also include the freestream term,
-				// which we approximate as the same for both
-				Vector3d v_top = total_ind_top + freestream;
-				Vector3d v_bottom = total_ind_bottom + freestream;
-				double cp = (v_bottom.squaredNorm() - v_top.squaredNorm()) / freestream.squaredNorm();
-				cps(geom_sizes[effect_geom] + effect) = cp;
-		}
-	}
-
-}
-
 Eigen::Vector3d PanelMethod::compute_aero_force()
 {
 	Vector3d acc; acc.setZero();
@@ -507,8 +404,8 @@ PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vecto
 			Vector3d pos = corner + x_axis * xpos + y_axis * ypos;
 
 			Vector3d total_ind; total_ind.setZero();
-			Vector3d freestream = -body_vel;
-			freestream -= omega.cross(pos);
+			Vector3d freestream = -vel_history.front();
+			freestream -= angvel_history.front().cross(pos);
 
 			for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
 			{
@@ -548,8 +445,7 @@ PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vecto
 	o << "}";
 	return o.str();
 }
-
-void PanelMethod::compute_cps_smarter()
+void PanelMethod::compute_cps()
 {
 	// TODO: This could be improved much by caching weighted averages
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
@@ -561,8 +457,8 @@ void PanelMethod::compute_cps_smarter()
 			Vector3d normal = tw.normals.col(effect);
 
 			// TODO: Signs
-			Vector3d freestream = -body_vel;
-			freestream -= omega.cross(center);
+			Vector3d freestream = -vel_history.front();
+			freestream -= angvel_history.front().cross(center);
 
 			Array4d areas; areas.setZero();
 			Array4d mus; mus.setZero();
@@ -679,6 +575,87 @@ void PanelMethod::compute_cps_smarter()
 
 }
 
+void PanelMethod::build_wakes_from_history()
+{
+
+}
+
+
+void PanelMethod::integrate_velocities(double wake_scale)
+{
+	pos_history.clear();
+	orient_history.clear();
+
+	Vector3d body_pos; body_pos.setZero();
+	Isometry3d body_orient; body_orient.setIdentity();
+
+	// Consider an observer situated in the ground, seeing the wing move.
+	// The (unperturbed) wake is the set of points that the trailing edge of the
+	// wing touches as it moves.
+	// the set of those points are generated by integrating:
+	// dx/dt (inertial) = dx/dt (rotating) + Omega * x
+	// Where dx / dt (rotating) = body_vel  by definition
+	// While this problem has an analytical solution, it's way simpler
+	// to numerically integrate the equations
+	// (We in fact integrate backwards in time)
+	// Note that first edge is trailing edge!
+	for(Index zi = 1; zi < num_wake_edges; zi++)
+	{
+		double progress = (double)zi / (double)(num_wake_edges - 1);
+		double arr_progress = (double)(zi - 1) / (double)(num_wake_edges - 1);
+
+		double pos = 1.0 - std::cos(M_PI * arr_progress * 0.5);
+
+		double speed = std::sin(M_PI * progress * 0.5);
+
+		// Interpolated sampling for history
+		// TODO: Maybe higher than linear is good?
+		double array_prog = pos * (double)(num_wake_edges - 1);
+		double step = 1.0 / (double)(num_wake_edges - 1);
+		Index prog_sup = (size_t)(std::ceil(array_prog));
+		Index prog_inf = (size_t)(std::floor(array_prog));
+		double fac_sup =  array_prog - (double)prog_inf;
+		double fac_inf = 1.0 - fac_sup;
+
+		Vector3d vel = vel_history[prog_sup] * fac_sup + vel_history[prog_inf] * fac_inf;
+		Vector3d omega = angvel_history[prog_sup] * fac_sup + angvel_history[prog_inf] * fac_inf;
+
+		// Integrate velocity
+		Vector3d inertial_vel = body_orient * vel;
+		body_pos -= inertial_vel * speed * wake_scale;
+
+		double omega_length = omega.norm();
+		Vector3d omega_norm = omega / omega_length;
+
+		// Integrate rotation
+		if(omega_length > 0.0)
+		{
+			body_orient = body_orient.rotate(AngleAxisd(-omega_length * speed * wake_scale, omega_norm));
+		}
+
+		pos_history.push_back(body_pos);
+		orient_history.push_back(body_orient);
+	}
+}
+
+void PanelMethod::timestep(const Vector3d &cur_vel, const Vector3d &cur_angvel)
+{
+	// Pop-out oldest velocity profile
+	vel_history.pop_back();
+	angvel_history.pop_back();
+
+	// Push new velocity profile
+	vel_history.push_front(cur_vel);
+	angvel_history.push_front(cur_angvel);
+
+	integrate_velocities(wake_scale);
+
+	for(size_t i = 0; i < thin_wings.size(); i++)
+	{
+		wakes[i].timestep(*thin_wings[i], *this);
+	}
+
+}
 
 
 
