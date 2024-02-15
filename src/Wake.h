@@ -32,5 +32,6 @@ public:
 	void mu_convect(size_t wing_idx, const PanelMethod& method);
 
 	void inherit_solution(size_t wake_idx, const PanelMethod& method);
+	void transfer_unsteady_solution(size_t wake_idx, const PanelMethod& method);
 
 };

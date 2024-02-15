@@ -93,6 +93,10 @@ public:
 	std::string solution_to_string(size_t for_geom);
 	// Same as before but for pressure coefficients
 	std::string cps_to_string(size_t for_geom);
+	// Same as before but for the mus over the wake of a geometry
+	// (It's a 1D array that maps to each polygon the solution, order of polygons
+	//  set as in wake_geom_to_string)
+	std::string wake_solution_to_string(size_t for_geom);
 
 	void compute_cps();
 

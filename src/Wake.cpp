@@ -17,6 +17,7 @@ void Wake::build_initial_geometry(const ThinWing &wing, const PanelMethod &metho
 
 	// Generate the rectangles, same as for the wing
 	quads = Array4Xi(4, (num_trailing_edge - 1) * (method.num_wake_edges - 1));
+	from_panel = ArrayXi((num_trailing_edge - 1) * (method.num_wake_edges - 1));
 
 	for(int xi = 0; xi < num_trailing_edge - 1; xi++)
 	{
@@ -26,6 +27,9 @@ void Wake::build_initial_geometry(const ThinWing &wing, const PanelMethod &metho
 			quads(1, xi * (method.num_wake_edges - 1) + zi) = (xi + 1) * method.num_wake_edges + zi;
 			quads(2, xi * (method.num_wake_edges - 1) + zi) = (xi + 1) * method.num_wake_edges + zi + 1;
 			quads(3, xi * (method.num_wake_edges - 1) + zi) = xi * method.num_wake_edges + zi + 1;
+
+			Index panel_idx = wing.trailing_panels(xi);
+			from_panel(xi * (method.num_wake_edges - 1) + zi) = panel_idx;
 		}
 	}
 
@@ -91,19 +95,19 @@ void Wake::inherit_solution(size_t wake_idx, const PanelMethod &method)
 void Wake::mu_convect(size_t wake_idx, const PanelMethod &method)
 {
 	size_t num_trailing_edge = method.thin_wings[wake_idx]->trailing_panels.rows();
+	// New solution, pushed as 0s for now
+	ArrayXd zeros = ArrayXd(num_trailing_edge);
+	zeros.setZero();
+	mu_history.pop_back();
+	mu_history.push_front(zeros);
 	for(Index zi = 1; zi < method.num_wake_edges; zi++)
 	{
-		double progress = (double)zi / (double)(method.num_wake_edges - 1);
 		double arr_progress = (double)(zi - 1) / (double)(method.num_wake_edges - 1);
 
 		double pos = 1.0 - std::cos(M_PI * arr_progress * 0.5);
 
-		double speed = std::sin(M_PI * progress * 0.5);
-
-		// Interpolated sampling for history
 		// TODO: This could REALLY benefit from smoother interp
 		double array_prog = pos * (double)(method.num_wake_edges - 1);
-		double step = 1.0 / (double)(method.num_wake_edges - 1);
 		Index prog_sup = (size_t)(std::ceil(array_prog));
 		Index prog_inf = (size_t)(std::floor(array_prog));
 		double fac_sup =  array_prog - (double)prog_inf;
@@ -117,7 +121,12 @@ void Wake::mu_convect(size_t wake_idx, const PanelMethod &method)
 			if(prog_inf == 0)
 			{
 				influence += fac_inf;
-				mu = mu_history[prog_sup](xi) * fac_sup;
+				// !!!!!!!!!!! IMPORTANT !!!!!!!!!!!!!!
+				// Note that this value is used for later interpolation
+				// so it's interesting to set it to the superior mu
+				// (As otherwise we would have to interpolate again!)
+				// TODO: THIS IS VERY IMPORTANT, DOCUMENT IT WELL!
+				mu = mu_history[prog_sup](xi);
 			}
 			else
 			{
@@ -129,6 +138,27 @@ void Wake::mu_convect(size_t wake_idx, const PanelMethod &method)
 		}
 	}
 
+}
+
+void Wake::transfer_unsteady_solution(size_t wake_idx, const PanelMethod &method)
+{
+	size_t num_trailing_edge = method.thin_wings[wake_idx]->trailing_panels.rows();
+	for(Index i = 0; i < mus.rows(); i++)
+	{
+		Index panel = from_panel(i);
+		double sln = method.solution(method.geom_sizes[wake_idx] + panel);
+		double infl = influences(i);
+		mus(i) = mus(i) * (1.0 - infl) + sln * infl;
+	}
+
+	// Overwrite history too for proper convection
+	ArrayXd overwrite_hist = ArrayXd(num_trailing_edge);
+	for(Index i = 0; i < num_trailing_edge; i++)
+	{
+		Index panel = method.thin_wings[wake_idx]->trailing_panels(i);
+		overwrite_hist(i) = method.solution(method.geom_sizes[wake_idx] + panel);
+	}
+	mu_history[0] = overwrite_hist;
 }
 
 

@@ -47,13 +47,13 @@ int main()
 	write_string_to_file("workdir/wing_nrm.dat", geom->normals_to_string());
 
 	PanelMethod panels;
-	double AoA = 10.0 * M_PI / 180.0;
-	double fvel = 10.0;
+	double AoA = 5.0 * M_PI / 180.0;
+	double fvel = 5.0;
 	Eigen::Vector3d bvel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
 	Eigen::Vector3d omega = Eigen::Vector3d(0, 0, 0);
 
 	panels.thin_wings.push_back(geom);
-	panels.shed_initial_wake(100, 0.01, bvel, omega);
+	panels.shed_initial_wake(100, 0.005, bvel, omega);
 	panels.build_geometry_matrix();
 
 	// Initial solution that will be convected in the wake
@@ -63,14 +63,15 @@ int main()
 	panels.transfer_solution_to_wake();
 
 	double t = 0.0;
-	int MAX_IT = 10;
+	int MAX_IT = 1;
 	for(size_t i = 0; i < MAX_IT; i++)
 	{
-		AoA = (10.0 - t * 0.5) * M_PI / 180.0;
+		AoA = 5.0 * M_PI / 180.0;
+		fvel = 5.0;
 		bvel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
 		omega = Eigen::Vector3d(0, 0, 0);
 		panels.timestep(bvel, omega);
-		t += 0.2;
+		t += 1.0;
 		std::cout << "It: " << i + 1 << " / " << MAX_IT << std::endl;
 	}
 	//panels.compute_cps_smart();
@@ -82,6 +83,7 @@ int main()
 	//write_string_to_file("workdir/mat.dat", panels.geometry_matrix_to_string());
 	//write_string_to_file("workdir/dyn_mat.dat", panels.dynamic_matrix_to_string());
 	write_string_to_file("workdir/sln.dat", panels.solution_to_string(0));
+	write_string_to_file("workdir/wake_sln.dat", panels.wake_solution_to_string(0));
 	write_string_to_file("workdir/wake.dat", panels.wake_geom_to_string(0));
 	write_string_to_file("workdir/cps.dat", panels.cps_to_string(0));
 	/*write_string_to_file("workdir/flowmap.dat", panels.sample_flow_field_to_string(

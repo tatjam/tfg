@@ -67,7 +67,15 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 		verts.col(3) = wake.vertices.col(wake.quads(3, cause_panel));
 
 		Vector3d nrm = wake.normals.col(cause_panel);
-		acc += induced_vel_verts(verts, nrm, pos);
+		Vector3d val = induced_vel_verts(verts, nrm, pos);
+
+		Index panel_idx = cause_trailing * (num_wake_edges - 1) + i;
+		if(MODE == 1)
+			val *= wake.influences(panel_idx);
+		else if(MODE == 2)
+			val *= wake.mus(panel_idx);
+
+		acc += val;
 	}
 	return acc;
 }
@@ -85,8 +93,7 @@ double PanelMethod::induced_norm_vel_wake(const Wake &wake, Eigen::Index cause_t
 										  Eigen::Index effect_panel, const bool STEADY)
 {
 	// 0 = STEADY mode, 1 = Multiply by influence
-	Vector3d acc = induced_vel_wake(wake, cause_trailing, effect, effect_panel,
-													STEADY ? 0 : 1);
+	Vector3d acc = induced_vel_wake(wake, cause_trailing, effect, effect_panel, STEADY ? 0 : 1);
 	Vector3d normal = effect.normals.col(effect_panel).matrix();
 	return acc.dot(normal);
 }
@@ -115,7 +122,26 @@ void PanelMethod::build_rhs(const bool STEADY)
 		for(size_t panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
 		{
 			Vector3d norm = thin_wings[geom]->normals.col(panel);
-			rhs(panel + geom_sizes[geom], 0) = norm.dot(vel_history.front());
+			Vector3d center = get_center(*thin_wings[geom], panel);
+			Vector3d freestream = -vel_history.front();
+			freestream -= angvel_history.front().cross(center);
+			rhs(panel + geom_sizes[geom], 0) = -norm.dot(freestream);
+
+			if(!STEADY)
+			{
+				Vector3d induced_wakes; induced_wakes.setZero();
+				// Include fixed wake mus
+				for(size_t wake_geom = 0; wake_geom < thin_wings.size(); wake_geom++)
+				{
+					for(Index trail_pan = 0; trail_pan < thin_wings[geom]->trailing_panels.rows(); trail_pan++)
+					{
+						induced_wakes += induced_vel_wake(wakes[wake_geom], trail_pan, *thin_wings[geom], panel, 2);
+					}
+				}
+				// Recompile
+				rhs(panel + geom_sizes[geom], 0) -= norm.dot(induced_wakes);
+			}
+
 		}
 	}
 }
@@ -174,6 +200,14 @@ std::string PanelMethod::solution_to_string(size_t for_geom)
 	o << solution.block(geom_sizes[for_geom], 0, geom_sizes[for_geom + 1], 1).transpose();
 	return o.str();
 }
+
+std::string PanelMethod::wake_solution_to_string(size_t for_geom)
+{
+	std::stringstream o;
+	o << wakes[for_geom].mus.transpose();
+	return o.str();
+}
+
 std::string PanelMethod::cps_to_string(size_t for_geom)
 {
 	std::stringstream o;
@@ -229,6 +263,7 @@ std::string PanelMethod::wake_geom_to_string(size_t for_geom)
 {
 	return wakes[for_geom].quads_to_string();
 }
+
 
 Eigen::Vector3d
 PanelMethod::induced_vel_verts(const Matrix<double, 3, 4> &vertices, const Vector3d& normal, const Vector3d &pos)
@@ -590,6 +625,10 @@ void PanelMethod::timestep(const Vector3d &cur_vel, const Vector3d &cur_angvel)
 	build_dynamic(false);
 	solve();
 
+	for(size_t i = 0; i < thin_wings.size(); i++)
+	{
+		wakes[i].transfer_unsteady_solution(i, *this);
+	}
 }
 
 void PanelMethod::transfer_solution_to_wake()
@@ -600,3 +639,4 @@ void PanelMethod::transfer_solution_to_wake()
 	}
 
 }
+
