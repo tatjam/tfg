@@ -73,7 +73,10 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 		if(MODE == 1)
 			val *= wake.influences(panel_idx);
 		else if(MODE == 2)
-			val *= wake.mus(panel_idx);
+		{
+			double infl = wake.influences(panel_idx);
+			val *= wake.mus(panel_idx) * (1.0 - infl);
+		}
 
 		acc += val;
 	}
@@ -138,7 +141,6 @@ void PanelMethod::build_rhs(const bool STEADY)
 						induced_wakes += induced_vel_wake(wakes[wake_geom], trail_pan, *thin_wings[geom], panel, 2);
 					}
 				}
-				// Recompile
 				rhs(panel + geom_sizes[geom], 0) -= norm.dot(induced_wakes);
 			}
 
