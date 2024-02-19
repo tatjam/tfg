@@ -199,7 +199,7 @@ std::string PanelMethod::dynamic_matrix_to_string()
 std::string PanelMethod::solution_to_string(size_t for_geom)
 {
 	std::stringstream o;
-	o << solution.block(geom_sizes[for_geom], 0, geom_sizes[for_geom + 1], 1).transpose();
+	o << sln_hist.front().block(geom_sizes[for_geom], 0, geom_sizes[for_geom + 1], 1).transpose();
 	return o.str();
 }
 
@@ -219,12 +219,30 @@ std::string PanelMethod::cps_to_string(size_t for_geom)
 
 PanelMethod::PanelMethod()
 {
+	// TODO: It only works well for = 1
+	backward_difference_order = 1;
 }
 
-void PanelMethod::solve()
+void PanelMethod::solve(bool STEADY)
 {
-	solution = (geometry_matrix + dynamic_matrix).colPivHouseholderQr().solve(rhs);
+	if(sln_hist.size() == backward_difference_order + 1)
+	{
+		sln_hist.pop_back();
+	}
 
+	sln_hist.push_front((geometry_matrix + dynamic_matrix).colPivHouseholderQr().solve(rhs));
+
+	if(STEADY)
+	{
+		if(sln_hist.size() != backward_difference_order + 1)
+		{
+			sln_hist.resize(backward_difference_order + 1);
+		}
+		for(size_t i = 1; i < backward_difference_order + 1; i++)
+		{
+			sln_hist[i] = sln_hist[0];
+		}
+	}
 }
 
 void PanelMethod::shed_initial_wake(Eigen::Index num_wake_edges, double wake_scale,
@@ -320,7 +338,7 @@ Eigen::Vector3d PanelMethod::compute_aero_force()
 	Vector3d acc; acc.setZero();
 
 
-	for(size_t geom = 0; geom < thin_wings.size(); geom++)
+	/*for(size_t geom = 0; geom < thin_wings.size(); geom++)
 	{
 		for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
 		{
@@ -330,12 +348,12 @@ Eigen::Vector3d PanelMethod::compute_aero_force()
 			Vector3d force = nrm * cps(geom_sizes[geom] + panel);
 			acc += force * area;
 		}
-	}
+	}*/
 
 
 	// Center line lift
 
-	/*for(Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
+	for(Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
 	{
 		Index idx = thin_wings[0]->num_spanwise / 2 * (thin_wings[0]->num_chorwise - 1) + i;
 		Vector3d nrm =thin_wings[0]->normals.col(idx);
@@ -345,7 +363,7 @@ Eigen::Vector3d PanelMethod::compute_aero_force()
 		double length = (b - a).norm();
 		Vector3d force = nrm * cps(idx);
 		acc += force * length;
-	}*/
+	}
 
 	return acc;
 }
@@ -377,7 +395,7 @@ PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vecto
 				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
 				{
 					Vector3d ind = induced_vel(*thin_wings[cause_geom], cause, pos);
-					ind *= solution(geom_sizes[cause_geom] + cause);
+					ind *= sln_hist.front()(geom_sizes[cause_geom] + cause);
 					total_ind += ind;
 				}
 				// Wake effect
@@ -409,8 +427,24 @@ PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vecto
 	o << "}";
 	return o.str();
 }
-void PanelMethod::compute_cps()
+
+// Source: https://stackoverflow.com/a/44719219
+constexpr inline size_t binom(size_t n, size_t k) noexcept
 {
+	return
+			(        k> n  )? 0 :          // out of range
+			(k==0 || k==n  )? 1 :          // edge
+			(k==1 || k==n-1)? n :          // first
+			binom(n - 1, k - 1) * n / k;   // recursive
+}
+
+
+void PanelMethod::compute_cps(bool STEADY)
+{
+	assert(sln_hist.size() > 1 || STEADY);
+
+	Eigen::ArrayXd& solution = sln_hist.front();
+
 	// TODO: This could be improved much by caching weighted averages
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 	{
@@ -528,12 +562,29 @@ void PanelMethod::compute_cps()
 			Matrix<double, 6, 6> A = lsq.transpose() * lsq;
 			Vector<double, 6> parameters = A.fullPivLu().solve(rhs_t);
 
-			//
+			// grad phi
 			Vector3d grad = Vector3d(parameters(3), parameters(4), 0.0);
 			grad = tinv * grad;
 
-			// Now,
-			cps(geom_sizes[effect_geom] + effect) = -2.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+			Index panel_idx = geom_sizes[effect_geom] + effect;
+
+			cps(panel_idx) = -2.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+			if(!STEADY)
+			{
+				// backward differences for phi evolution
+				double partial_phi = 0.0;
+				double sgn = 1.0;
+				for(size_t i = 0; i < sln_hist.size(); i++)
+				{
+					partial_phi += sgn * (double)binom(sln_hist.size() - 1, i) * sln_hist[i](panel_idx);
+					sgn *= -1.0;
+				}
+
+				// wake_scale is our timestep in essence
+				partial_phi /= std::pow(wake_scale, sln_hist.size() - 1);
+
+				cps(panel_idx) -= 2.0 * partial_phi;
+			}
 		}
 	}
 
@@ -625,7 +676,7 @@ void PanelMethod::timestep(const Vector3d &cur_vel, const Vector3d &cur_angvel)
 	}
 
 	build_dynamic(false);
-	solve();
+	solve(false);
 
 	for(size_t i = 0; i < thin_wings.size(); i++)
 	{

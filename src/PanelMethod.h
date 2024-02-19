@@ -16,7 +16,7 @@ protected:
 	//  index = index_within_geometry + geom_sizes[geometry]
 	Eigen::MatrixXd geometry_matrix;
 
-	Eigen::ArrayXd solution;
+	std::deque<Eigen::ArrayXd> sln_hist;
 
 	Eigen::ArrayXd cps;
 
@@ -52,6 +52,9 @@ protected:
 
 public:
 	std::vector<Wake> wakes;
+
+	// We will store backward_difference_order + 1 solutions
+	int backward_difference_order;
 
 	double wake_scale;
 	// NOTE: Includes trailing edge panel (which is always fixed!)
@@ -98,7 +101,7 @@ public:
 	//  set as in wake_geom_to_string)
 	std::string wake_solution_to_string(size_t for_geom);
 
-	void compute_cps();
+	void compute_cps(bool STEADY);
 
 	void timestep(const Eigen::Vector3d& cur_vel, const Eigen::Vector3d& cur_angvel);
 
@@ -110,7 +113,8 @@ public:
 	// Obtains flow field in a rectangle defined by a corner and two sides (x_axis and y_axis) using given sample points
 	std::string sample_flow_field_to_string(Eigen::Vector3d corner, Eigen::Vector3d x_axis, Eigen::Vector3d y_axis, size_t num_x, size_t num_y);
 
-	void solve();
+	// If STEADY is true, solutions are overwritten to simulate steady state
+	void solve(bool STEADY);
 
 	PanelMethod();
 

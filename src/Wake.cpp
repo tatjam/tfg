@@ -75,7 +75,7 @@ void Wake::inherit_solution(size_t wake_idx, const PanelMethod &method)
 	for(size_t xi = 0; xi < num_trailing_edge; xi++)
 	{
 		Index trail_panel = method.thin_wings[wake_idx]->trailing_panels(xi);
-		double val = method.solution(method.geom_sizes[wake_idx] + trail_panel);
+		double val = method.sln_hist.front()(method.geom_sizes[wake_idx] + trail_panel);
 		stat_sample(xi) = val;
 		for(size_t zi = 0; zi < method.num_wake_edges - 1; zi++)
 		{
@@ -146,7 +146,7 @@ void Wake::transfer_unsteady_solution(size_t wake_idx, const PanelMethod &method
 	for(Index i = 0; i < mus.rows(); i++)
 	{
 		Index panel = from_panel(i);
-		double sln = method.solution(method.geom_sizes[wake_idx] + panel);
+		double sln = method.sln_hist.front()(method.geom_sizes[wake_idx] + panel);
 		double infl = influences(i);
 		mus(i) = mus(i) * (1.0 - infl) + sln * infl;
 	}
@@ -156,7 +156,7 @@ void Wake::transfer_unsteady_solution(size_t wake_idx, const PanelMethod &method
 	for(Index i = 0; i < num_trailing_edge; i++)
 	{
 		Index panel = method.thin_wings[wake_idx]->trailing_panels(i);
-		overwrite_hist(i) = method.solution(method.geom_sizes[wake_idx] + panel);
+		overwrite_hist(i) = method.sln_hist.front()(method.geom_sizes[wake_idx] + panel);
 	}
 	mu_history[0] = overwrite_hist;
 }
