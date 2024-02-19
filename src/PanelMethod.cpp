@@ -333,38 +333,39 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 	return 0.5 * (v2 - v1).cross(v3 - v1).norm() + 0.5 * (v4 - v2).cross(v4 - v3).norm();
 }
 
-Eigen::Vector3d PanelMethod::compute_aero_force()
+Eigen::Vector3d PanelMethod::compute_aero_force(bool centerline)
 {
-	Vector3d acc; acc.setZero();
+	Vector3d acc;
+	acc.setZero();
 
-
-	/*for(size_t geom = 0; geom < thin_wings.size(); geom++)
+	if (centerline)
 	{
-		for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
+		for (Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
 		{
-			Vector3d nrm = thin_wings[geom]->normals.col(panel);
-			double area = get_area(*thin_wings[geom], panel);
-
-			Vector3d force = nrm * cps(geom_sizes[geom] + panel);
-			acc += force * area;
+			Index idx = thin_wings[0]->num_spanwise / 2 * (thin_wings[0]->num_chorwise - 1) + i;
+			Vector3d nrm = thin_wings[0]->normals.col(idx);
+			double area = get_area(*thin_wings[0], idx);
+			Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(0, idx));
+			Vector3d b = thin_wings[0]->vertices.col(thin_wings[0]->quads(3, idx));
+			double length = (b - a).norm();
+			Vector3d force = nrm * cps(idx);
+			acc += force * length;
 		}
-	}*/
-
-
-	// Center line lift
-
-	for(Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
-	{
-		Index idx = thin_wings[0]->num_spanwise / 2 * (thin_wings[0]->num_chorwise - 1) + i;
-		Vector3d nrm =thin_wings[0]->normals.col(idx);
-		double area = get_area(*thin_wings[0], idx);
-		Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(0, idx));
-		Vector3d b = thin_wings[0]->vertices.col(thin_wings[0]->quads(3, idx));
-		double length = (b - a).norm();
-		Vector3d force = nrm * cps(idx);
-		acc += force * length;
 	}
+	else
+	{
+		for(size_t geom = 0; geom < thin_wings.size(); geom++)
+		{
+			for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
+			{
+				Vector3d nrm = thin_wings[geom]->normals.col(panel);
+				double area = get_area(*thin_wings[geom], panel);
 
+				Vector3d force = nrm * cps(geom_sizes[geom] + panel);
+				acc += force * area;
+			}
+		}
+	}
 	return acc;
 }
 
@@ -582,8 +583,7 @@ void PanelMethod::compute_cps(bool STEADY)
 
 				// wake_scale is our timestep in essence
 				partial_phi /= std::pow(wake_scale, sln_hist.size() - 1);
-
-				cps(panel_idx) -= 2.0 * partial_phi;
+				cps(panel_idx) -= 2.0 * partial_phi / freestream.squaredNorm();
 			}
 		}
 	}

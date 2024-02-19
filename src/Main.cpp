@@ -47,15 +47,26 @@ int main()
 	write_string_to_file("workdir/wing_nrm.dat", geom->normals_to_string());
 
 	PanelMethod panels;
-	double AoA = 5.0 * M_PI / 180.0;
-	double fvel = 5.0;
+	PanelMethod panels2;
+	double AoA = 1.0 * M_PI / 180.0;
+	double fvel = 0.001;
+
+	size_t NPANELS = 200;
+	double TSTEP = 0.01;
+
 	Eigen::Vector3d bvel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
 	Eigen::Vector3d omega = Eigen::Vector3d(0, 0, 0);
 
 	panels.thin_wings.push_back(geom);
 	panels.backward_difference_order = 1;
-	panels.shed_initial_wake(60, 0.01, bvel, omega);
+	panels.shed_initial_wake(NPANELS, TSTEP, bvel, omega);
 	panels.build_geometry_matrix();
+
+	panels2.thin_wings.push_back(geom);
+	panels2.shed_initial_wake(NPANELS, TSTEP, bvel, omega);
+	panels2.build_geometry_matrix();
+	panels2.build_dynamic(true);
+	panels2.solve(true);
 
 	// Initial solution that will be convected in the wake
 	panels.build_dynamic(true);
@@ -64,23 +75,35 @@ int main()
 	panels.transfer_solution_to_wake();
 
 	double t = 0.0;
-	int MAX_IT = 60;
+	int MAX_IT = NPANELS;
 	Eigen::ArrayXd forces = Eigen::ArrayXd(MAX_IT);
+	Eigen::ArrayXd steady_forces = Eigen::ArrayXd(MAX_IT);
 	for(size_t i = 0; i < MAX_IT; i++)
 	{
-		AoA = 0.0 * M_PI / 180.0;
-		fvel = 5.0;
+		AoA = 1.0 * M_PI / 180.0;
+		fvel = 1.0;
 		bvel = Eigen::Vector3d(0, fvel * std::sin(AoA), -fvel * std::cos(AoA));
 		omega = Eigen::Vector3d(0, 0, 0);
 		panels.timestep(bvel, omega);
-		t += 1.0;
 		std::cout << "It: " << i + 1 << " / " << MAX_IT << std::endl;
 		panels.compute_cps(false);
-		forces(i) = panels.compute_aero_force()(1);
+		forces(i) = panels.compute_aero_force(true)(1);
+
+		panels2.shed_initial_wake(NPANELS, TSTEP, bvel, omega);
+		panels2.build_dynamic(true);
+		panels2.solve(true);
+		panels2.compute_cps(true);
+		steady_forces(i) = panels2.compute_aero_force(true)(1);
+		t += TSTEP;
+
 	}
 	std::stringstream s;
 	s << forces.transpose();
 	write_string_to_file("workdir/lift_over_time.dat", s.str());
+
+	std::stringstream s2;
+	s2 << steady_forces.transpose();
+	write_string_to_file("workdir/lift_over_time_steady.dat", s2.str());
 
 	//write_string_to_file("workdir/mat.dat", panels.geometry_matrix_to_string());
 	//write_string_to_file("workdir/dyn_mat.dat", panels.dynamic_matrix_to_string());

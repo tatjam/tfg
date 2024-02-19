@@ -106,7 +106,7 @@ public:
 	void timestep(const Eigen::Vector3d& cur_vel, const Eigen::Vector3d& cur_angvel);
 
 	// Requires cps to be computed
-	Eigen::Vector3d compute_aero_force();
+	Eigen::Vector3d compute_aero_force(bool centerline);
 
 	std::string wake_geom_to_string(size_t for_geom);
 
