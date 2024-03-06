@@ -4,11 +4,8 @@
 
 using namespace Eigen;
 
-const double SPARSE_THRESOLD = 0.001;
-
 void PanelMethod::build_geometry_matrix()
 {
-
 	geom_sizes.clear();
 	geom_sizes.reserve(thin_wings.size());
 	size_t total_size = 0;
@@ -19,12 +16,10 @@ void PanelMethod::build_geometry_matrix()
 	}
 	geom_sizes.push_back(total_size);
 
-	geometry_matrix = SparseMatrix<double>(total_size, total_size);
-	dynamic_matrix = SparseMatrix<double>(total_size, total_size);
+	geometry_matrix = MatrixXd(total_size, total_size);
+	dynamic_matrix = MatrixXd(total_size, total_size);
 	rhs = MatrixXd(total_size, 1);
 	cps = MatrixXd(total_size, 1);
-
-	std::vector<Triplet<double>> triplets;
 
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 	{
@@ -38,16 +33,11 @@ void PanelMethod::build_geometry_matrix()
 					auto effect_idx = (Index)(effect + geom_sizes[effect_geom]);
 					auto cause_idx = (Index)(cause + geom_sizes[cause_geom]);
 
-					if(induced > SPARSE_THRESOLD)
-					{
-						triplets.emplace_back(effect_idx, cause_idx, induced);
-					}
+					geometry_matrix(effect_idx, cause_idx) = induced;
 				}
 			}
 		}
 	}
-
-	geometry_matrix.setFromTriplets(triplets.begin(), triplets.end());
 
 }
 
@@ -166,8 +156,6 @@ void PanelMethod::build_dynamic_matrix(const bool STEADY)
 	// edge panels, thus the wake become "integrated" into the contribution
 	// from the last panel.
 
-	std::vector<Triplet<double>> triplets;
-
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 	{
 		for(size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
@@ -183,17 +171,11 @@ void PanelMethod::build_dynamic_matrix(const bool STEADY)
 					auto effect_idx = (Index)(effect + geom_sizes[effect_geom]);
 					auto cause_idx = (Index)(cause + geom_sizes[cause_geom]);
 
-					if(induced > SPARSE_THRESOLD)
-					{
-						triplets.emplace_back(effect_idx, cause_idx, induced);
-					}
+					dynamic_matrix(effect_idx, cause_idx) = induced;
 				}
 			}
 		}
 	}
-
-	dynamic_matrix.setZero();
-	dynamic_matrix.setFromTriplets(triplets.begin(), triplets.end());
 }
 
 void PanelMethod::build_dynamic(const bool STEADY)
@@ -257,8 +239,8 @@ void PanelMethod::solve(bool STEADY)
 		guess.setZero();
 	}
 
-	BiCGSTAB<SparseMatrix<double>, IncompleteLUT<double>> solver;
-	SparseMatrix<double> mat = geometry_matrix + dynamic_matrix;
+	BiCGSTAB<MatrixXd> solver;
+	MatrixXd mat = geometry_matrix + dynamic_matrix;
 	solver.compute(mat);
 	VectorXd sln = solver.solveWithGuess(rhs, guess);
 	sln_hist.push_front(sln);
