@@ -141,7 +141,11 @@ int main()
 	double t = 0.0;
 
 	prepare_oscillating_case(geom, steady, dynamic);
+	auto start = std::chrono::system_clock::now();
 	iterate_oscillating_case(steady, dynamic, false, t);
+	auto end = std::chrono::system_clock::now();
+	std::cout << "Pre-computation took: " <<
+			  std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 	iterate_oscillating_case(steady, dynamic, true, t);
 
 	write_string_to_file("workdir/mat.dat", steady.geometry_matrix_to_string());
