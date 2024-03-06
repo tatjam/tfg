@@ -4,7 +4,7 @@ set (CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 
 project ("panels-cpp")
 
-set( SOURCES src/PlanarGeometry.cpp src/PanelMethod.cpp src/ThinWing.cpp src/Wake.cpp)
+set( SOURCES src/SheetGeometry.cpp src/PanelMethod.cpp src/ThinWing.cpp src/Wake.cpp)
 
 add_executable(verify_theodorsen ${SOURCES} src/cases/Theodorsen.cpp)
 add_executable(verify_wake ${SOURCES} src/cases/WakeGeneration.cpp)

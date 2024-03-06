@@ -1,5 +1,5 @@
 #pragma once
-#include "PlanarGeometry.h"
+#include "SheetGeometry.h"
 #include "ThinWing.h"
 #include <Geometry>
 #include <vector>
@@ -7,7 +7,7 @@
 
 class PanelMethod;
 
-class Wake : public PlanarGeometry
+class Wake : public SheetGeometry
 {
 public:
 	// Maps each wake panel to a panel from the original wing

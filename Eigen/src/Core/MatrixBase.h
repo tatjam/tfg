@@ -371,7 +371,7 @@ template<typename Derived> class MatrixBase
     inline JacobiSVD<PlainObject> jacobiSvd(unsigned int computationOptions = 0) const;
     inline BDCSVD<PlainObject>    bdcSvd(unsigned int computationOptions = 0) const;
 
-/////////// PlanarGeometry module ///////////
+/////////// SheetGeometry module ///////////
 
     #ifndef EIGEN_PARSED_BY_DOXYGEN
     /// \internal helper struct to form the return type of the cross product

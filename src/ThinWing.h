@@ -1,10 +1,10 @@
 #pragma once
-#include "PlanarGeometry.h"
+#include "SheetGeometry.h"
 #include <Geometry>
 
 // A thin wing situated at a relatively small angle of attack with respect to the incoming flow
 // (The angle must be small enough as for the "Kutta condition" to hold)
-class ThinWing : public PlanarGeometry
+class ThinWing : public SheetGeometry
 {
 public:
 
@@ -26,8 +26,10 @@ public:
 	//
 	// span is the wingspan (so both sides), and chord_scale is the scaling factor
 	// for returned chord lengths
-	static std::shared_ptr<ThinWing> from_chord_and_camber(std::function<std::pair<double, double>(double)> chord_fx,
-																 std::function<double(double, double)> camber_fx,
-																 size_t num_chordwise, size_t num_spanwise, double span, double chord_scale);
+	using ChordFx = std::function<std::pair<double, double>(double)>;
+	using CamberFx = std::function<double(double, double)>;
+	static std::shared_ptr<ThinWing> generate(ChordFx chord_fx, CamberFx camber_fx,
+											  size_t num_chordwise, size_t num_spanwise,
+											  double span, double chord_scale);
 
 };

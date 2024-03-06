@@ -282,7 +282,7 @@ template<typename MatrixType, int UpLo = Lower> class LDLT;
 template<typename VectorsType, typename CoeffsType, int Side=OnTheLeft> class HouseholderSequence;
 template<typename Scalar>     class JacobiRotation;
 
-// PlanarGeometry module:
+// SheetGeometry module:
 template<typename Derived, int _Dim> class RotationBase;
 template<typename Lhs, typename Rhs> class Cross;
 template<typename Derived> class QuaternionBase;

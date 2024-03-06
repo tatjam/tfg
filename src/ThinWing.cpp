@@ -3,9 +3,9 @@
 using namespace Eigen;
 
 std::shared_ptr<ThinWing>
-ThinWing::from_chord_and_camber(std::function<std::pair<double, double>(double)> chord_fx,
-									  std::function<double(double, double)> camber_fx,
-									  size_t num_chordwise, size_t num_spanwise, double span, double chord_scale)
+ThinWing::generate(std::function<std::pair<double, double>(double)> chord_fx,
+				   std::function<double(double, double)> camber_fx,
+				   size_t num_chordwise, size_t num_spanwise, double span, double chord_scale)
 {
 	auto out = std::make_shared<ThinWing>();
 	out->num_spanwise = num_spanwise;

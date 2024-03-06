@@ -2,8 +2,10 @@
 #include <Eigen>
 #include <memory>
 
-// PlanarGeometry for a wing or wake, which is infinitely thin
-class PlanarGeometry
+// Vertex-list polygon-list style geometry for flat and volumetric meshes
+// but where the local geometry is similar to 2D space (ie, a square shares
+// vertices with at most 8 other squares)
+class SheetGeometry
 {
 public:
 	// NOTE: Eigen uses column-major by default so 3X is optimal instead of X3 (for large X)
@@ -37,6 +39,6 @@ public:
 
 	void generate_normals();
 
-	PlanarGeometry();
+	SheetGeometry();
 
 };

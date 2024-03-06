@@ -1,5 +1,7 @@
 #include "PanelMethod.h"
 
+#include <IterativeLinearSolvers>
+
 using namespace Eigen;
 
 void PanelMethod::build_geometry_matrix()
@@ -225,12 +227,23 @@ PanelMethod::PanelMethod()
 
 void PanelMethod::solve(bool STEADY)
 {
+	Eigen::ArrayXd guess;
 	if(sln_hist.size() == backward_difference_order + 1)
 	{
+		guess = sln_hist.back();
 		sln_hist.pop_back();
 	}
+	else
+	{
+		guess = Eigen::ArrayXd(rhs.size());
+		guess.setZero();
+	}
 
-	sln_hist.push_front((geometry_matrix + dynamic_matrix).colPivHouseholderQr().solve(rhs));
+	BiCGSTAB<MatrixXd> solver;
+	MatrixXd mat = geometry_matrix + dynamic_matrix;
+	solver.compute(mat);
+	VectorXd sln = solver.solveWithGuess(rhs, guess);
+	sln_hist.push_front(sln);
 
 	if(STEADY)
 	{

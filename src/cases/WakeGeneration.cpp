@@ -17,7 +17,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::from_chord_and_camber(chord_fx, camber_fx, 8, 12, 1.0, 0.25);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 8, 12, 1.0, 0.25);
 	geom->generate_normals();
 
 	PanelMethod dynamic;

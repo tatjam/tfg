@@ -1,9 +1,9 @@
-#include "PlanarGeometry.h"
+#include "SheetGeometry.h"
 
 using namespace Eigen;
 
 
-std::string PlanarGeometry::quads_to_string(bool internal)
+std::string SheetGeometry::quads_to_string(bool internal)
 {
 	// Big array of quads
 	std::stringstream out;
@@ -51,7 +51,7 @@ std::string PlanarGeometry::quads_to_string(bool internal)
 }
 
 
-std::string PlanarGeometry::normals_to_string(double scl)
+std::string SheetGeometry::normals_to_string(double scl)
 {
 	std::stringstream out;
 	out << std::fixed;
@@ -83,7 +83,7 @@ std::string PlanarGeometry::normals_to_string(double scl)
 	return out.str();
 }
 
-void PlanarGeometry::generate_normals()
+void SheetGeometry::generate_normals()
 {
 	normals = Array3Xd(3, quads.cols());
 	for(Index i = 0; i < quads.cols(); i++)
@@ -99,7 +99,7 @@ void PlanarGeometry::generate_normals()
 
 }
 
-PlanarGeometry::PlanarGeometry()
+SheetGeometry::SheetGeometry()
 {
 	transform.setIdentity();
 
