@@ -14,7 +14,7 @@ protected:
 	// Panels are indexed in the order of the geometry, but because multiple geometries may be present
 	// we will offset them:
 	//  index = index_within_geometry + geom_sizes[geometry]
-	Eigen::MatrixXd geometry_matrix;
+	Eigen::SparseMatrix<double> geometry_matrix;
 
 	std::deque<Eigen::ArrayXd> sln_hist;
 
@@ -24,7 +24,7 @@ protected:
 	Eigen::MatrixXd rhs;
 
 	// This matrix includes the influence of dynamic elements
-	Eigen::MatrixXd dynamic_matrix;
+	Eigen::SparseMatrix<double> dynamic_matrix;
 
 	std::vector<size_t> geom_sizes;
 
