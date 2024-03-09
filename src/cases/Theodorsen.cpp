@@ -12,10 +12,10 @@ const double LONG_TERM_AOA = 0.1;
 
 const size_t NPANELS = 100;
 const double TSTEP = 0.0625;
-const size_t MAX_IT = NPANELS;
+const size_t MAX_IT = NPANELS * 4;
 
-const double HEAVE_AMPL = 0.05;
-const double HEAVE_OMEGA = 2.15;
+const double HEAVE_AMPL = 0.06;
+const double HEAVE_OMEGA = 1.0;
 
 const bool USE_CENTERLINE = true;
 
@@ -78,10 +78,12 @@ void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool wr
 {
 	Eigen::ArrayXd forces = Eigen::ArrayXd(MAX_IT);
 	Eigen::ArrayXd steady_forces = Eigen::ArrayXd(MAX_IT);
+	Eigen::ArrayXd alpha = Eigen::ArrayXd(MAX_IT);
+
 	for (size_t i = 0; i < MAX_IT; i++)
 	{
-		double AoA = HEAVE_AMPL * std::sin(HEAVE_OMEGA * t);
-		Vector3d bvel = Eigen::Vector3d(0, ADVANCE_VEL * std::sin(AoA), -ADVANCE_VEL);
+		double heave = HEAVE_AMPL * std::sin(HEAVE_OMEGA * t);
+		Vector3d bvel = Eigen::Vector3d(0, heave, -ADVANCE_VEL);
 		Vector3d omega = Eigen::Vector3d(0.0, 0.0, 0.0);
 		dynamic.timestep(bvel, omega);
 		std::cout << "It: " << i + 1 << " / " << MAX_IT << " (t = " << t << ")" << std::endl;
@@ -95,6 +97,8 @@ void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool wr
 			steady.solve(true);
 			steady.compute_cps(true);
 			steady_forces(i) = steady.compute_aero_force(USE_CENTERLINE)(1);
+
+			alpha(i) = std::atan2(heave, ADVANCE_VEL);
 		}
 
 		t += TSTEP;
@@ -106,6 +110,12 @@ void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool wr
 			std::stringstream s;
 			s << forces.transpose();
 			write_string_to_file("workdir/theodorsen_lift_over_time.dat", s.str());
+		}
+
+		{
+			std::stringstream s;
+			s << alpha.transpose();
+			write_string_to_file("workdir/theodorsen_alpha_over_time.dat", s.str());
 		}
 
 		{
@@ -146,6 +156,10 @@ int main()
 	auto end = std::chrono::system_clock::now();
 	std::cout << "Pre-computation took: " <<
 			  std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+	// Iterativo + sparse: 23929ms
+	// Iterativo: 19817ms
+	// Normal: 20896
+	// Conclusion: bottle-neck is matrix building code (dynamic matrix)
 	iterate_oscillating_case(steady, dynamic, true, t);
 
 	write_string_to_file("workdir/mat.dat", steady.geometry_matrix_to_string());
