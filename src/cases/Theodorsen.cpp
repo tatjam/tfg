@@ -10,12 +10,12 @@ const size_t LONG_TERM_NPANELS = 200;
 const double LONG_TERM_TSTEP = 0.0625;
 const double LONG_TERM_AOA = 0.1;
 
-const size_t NPANELS = 100;
-const double TSTEP = 0.0625;
+const size_t NPANELS = 50;
+const double TSTEP = 0.025;
 const size_t MAX_IT = NPANELS * 4;
 
 const double HEAVE_AMPL = 0.06;
-const double HEAVE_OMEGA = 1.0;
+const double HEAVE_OMEGA = 4.0;
 
 const bool USE_CENTERLINE = true;
 
@@ -59,7 +59,7 @@ void prepare_oscillating_case(std::shared_ptr<ThinWing> wing, PanelMethod& stead
 	dynamic.thin_wings.push_back(wing);
 	dynamic.backward_difference_order = 1;
 
-	Vector3d bvel = Vector3d(0, ADVANCE_VEL * std::sin(LONG_TERM_AOA), -ADVANCE_VEL * std::cos(LONG_TERM_AOA));
+	Vector3d bvel = Vector3d(0, 0.0, -ADVANCE_VEL);
 	Vector3d omega = Vector3d(0, 0, 0);
 
 	// Start of method timstep with steady solve
@@ -68,10 +68,13 @@ void prepare_oscillating_case(std::shared_ptr<ThinWing> wing, PanelMethod& stead
 	dynamic.build_dynamic(true);
 	dynamic.solve(true);
 	dynamic.transfer_solution_to_wake();
+	// Initial phi computation so first time-step can compute cps
+	dynamic.compute_phis();
 
 	steady.thin_wings.push_back(wing);
 	steady.shed_initial_wake(NPANELS, TSTEP, bvel, omega);
 	steady.build_geometry_matrix();
+
 }
 
 void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool write_results, double& t)
@@ -140,7 +143,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 32, 5.0, 0.25);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 32, 20.0, 0.25);
 	geom->generate_normals();
 
 	write_params();
@@ -152,7 +155,7 @@ int main()
 
 	prepare_oscillating_case(geom, steady, dynamic);
 	auto start = std::chrono::system_clock::now();
-	iterate_oscillating_case(steady, dynamic, false, t);
+	iterate_oscillating_case(steady, dynamic, true, t);
 	auto end = std::chrono::system_clock::now();
 	std::cout << "Pre-computation took: " <<
 			  std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;

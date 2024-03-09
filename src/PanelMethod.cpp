@@ -1,6 +1,7 @@
 #include "PanelMethod.h"
 
 #include <IterativeLinearSolvers>
+#include <iostream>
 
 using namespace Eigen;
 
@@ -48,11 +49,25 @@ Eigen::Vector3d PanelMethod::induced_vel(const ThinWing &cause, Eigen::Index cau
 	return induced_vel(cause, cause_panel, center);
 }
 
+double PanelMethod::induced_phi(const ThinWing &cause, Eigen::Index cause_panel, const ThinWing &effect,
+								Eigen::Index effect_panel, bool above)
+{
+	Vector3d center = get_center(effect, effect_panel);
+	return induced_phi(cause, cause_panel, center, above);
+}
+
 Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
 											  Eigen::Index effect_panel, const int MODE)
 {
 	Vector3d center = get_center(effect, effect_panel);
 	return induced_vel_wake(wake, cause_trailing, center, MODE);
+}
+
+double PanelMethod::induced_phi_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
+									 Eigen::Index effect_panel, bool above)
+{
+	Vector3d center = get_center(effect, effect_panel);
+	return induced_phi_wake(wake, cause_trailing, center, above);
 }
 
 Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos,
@@ -86,6 +101,26 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 }
 
 
+double PanelMethod::induced_phi_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos, bool above)
+{
+	double acc = 0.0;
+	for(Index i = 0; i < num_wake_edges - 1; i++)
+	{
+		Matrix<double, 3, 4> verts;
+		Index cause_panel = cause_trailing * (num_wake_edges - 1) + i;
+		verts.col(0) = wake.vertices.col(wake.quads(0, cause_panel));
+		verts.col(1) = wake.vertices.col(wake.quads(1, cause_panel));
+		verts.col(2) = wake.vertices.col(wake.quads(2, cause_panel));
+		verts.col(3) = wake.vertices.col(wake.quads(3, cause_panel));
+
+		Vector3d nrm = wake.normals.col(cause_panel);
+		double val = induced_phi_verts(verts, nrm, pos, above);
+
+		acc += val;
+	}
+	return acc;
+}
+
 double
 PanelMethod::induced_norm_vel(const ThinWing& cause, Index cause_panel, const ThinWing& effect, Index effect_panel)
 {
@@ -114,10 +149,19 @@ Eigen::Vector3d PanelMethod::induced_vel(const ThinWing &cause, Index cause_pane
 	verts.col(1) = cause.transform * cause.vertices.col(cause.quads(1, cause_panel));
 	verts.col(2) = cause.transform * cause.vertices.col(cause.quads(2, cause_panel));
 	verts.col(3) = cause.transform * cause.vertices.col(cause.quads(3, cause_panel));
-
 	Vector3d nrm = cause.normals.col(cause_panel);
-
 	return induced_vel_verts(verts, nrm, pos);
+}
+
+double PanelMethod::induced_phi(const ThinWing &cause, Eigen::Index cause_panel, const Vector3d &pos, bool above)
+{
+	Matrix<double, 3, 4> verts;
+	verts.col(0) = cause.transform * cause.vertices.col(cause.quads(0, cause_panel));
+	verts.col(1) = cause.transform * cause.vertices.col(cause.quads(1, cause_panel));
+	verts.col(2) = cause.transform * cause.vertices.col(cause.quads(2, cause_panel));
+	verts.col(3) = cause.transform * cause.vertices.col(cause.quads(3, cause_panel));
+	Vector3d nrm = cause.normals.col(cause_panel);
+	return induced_phi_verts(verts, nrm, pos, above);
 }
 
 void PanelMethod::build_rhs(const bool STEADY)
@@ -228,10 +272,20 @@ PanelMethod::PanelMethod()
 void PanelMethod::solve(bool STEADY)
 {
 	Eigen::ArrayXd guess;
-	if(sln_hist.size() == backward_difference_order + 1)
+	if (sln_hist.size() == backward_difference_order + 1)
+	{
+		sln_hist.pop_back();
+	}
+
+	if(phi_hist_above.size() == backward_difference_order + 1)
+	{
+		phi_hist_above.pop_back();
+		phi_hist_below.pop_back();
+	}
+
+	if(sln_hist.size() > 0)
 	{
 		guess = sln_hist.back();
-		sln_hist.pop_back();
 	}
 	else
 	{
@@ -244,6 +298,11 @@ void PanelMethod::solve(bool STEADY)
 	solver.compute(mat);
 	VectorXd sln = solver.solveWithGuess(rhs, guess);
 	sln_hist.push_front(sln);
+
+	if(!STEADY)
+	{
+		compute_phis();
+	}
 
 	if(STEADY)
 	{
@@ -324,6 +383,18 @@ PanelMethod::induced_vel_verts(const Matrix<double, 3, 4> &vertices, const Vecto
 	out /= 4.0 * M_PI;
 
 	return out;
+}
+
+double PanelMethod::induced_phi_verts(const Matrix<double, 3, 4> &vertices, const Vector3d &nrm, const Vector3d &pos,
+									  bool above)
+{
+	// Taken from "Calculation of potential flow around arbitrary bodies", by Hess and Smith
+	// The doublet potential "happens" to match the induced normal velocity for a constant source sheet!
+	// (Normal to the source sheet)
+
+
+
+	return 0;
 }
 
 Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_panel)
@@ -458,6 +529,7 @@ void PanelMethod::compute_cps(bool STEADY)
 	assert(sln_hist.size() > 1 || STEADY);
 
 	Eigen::ArrayXd& solution = sln_hist.front();
+	bool message_put = false;
 
 	// TODO: This could be improved much by caching weighted averages
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
@@ -586,28 +658,31 @@ void PanelMethod::compute_cps(bool STEADY)
 			if(!STEADY)
 			{
 				// backward differences for phi evolution
-				double partial_phi = 0.0;
+				double partial_phi_above = 0.0;
+				double partial_phi_below = 0.0;
 				double sgn = 1.0;
-				for(size_t i = 0; i < sln_hist.size(); i++)
+				if(phi_hist_above.size() == 0 && !message_put)
 				{
-					partial_phi += sgn * (double)binom(sln_hist.size() - 1, i) * sln_hist[i](panel_idx);
+					message_put = true;
+					std::cout << "WARNING: No phi history, remember to call compute_phis()" << std::endl;
+				}
+				for(size_t i = 0; i < phi_hist_above.size(); i++)
+				{
+					partial_phi_above += sgn * (double)binom(phi_hist_above.size() - 1, i) * phi_hist_above[i](panel_idx);
+					partial_phi_below += sgn * (double)binom(phi_hist_below.size() - 1, i) * phi_hist_below[i](panel_idx);
 					sgn *= -1.0;
 				}
 
 				// wake_scale is our timestep in essence
-				partial_phi /= std::pow(wake_scale, sln_hist.size() - 1);
-				cps(panel_idx) -= 2.0 * partial_phi / freestream.squaredNorm();
+				partial_phi_above /= std::pow(wake_scale, sln_hist.size() - 1);
+				partial_phi_below /= std::pow(wake_scale, sln_hist.size() - 1);
+
+				cps(panel_idx) += 2.0 * (partial_phi_above - partial_phi_below) / freestream.squaredNorm();
 			}
 		}
 	}
 
 }
-
-void PanelMethod::build_wakes_from_history()
-{
-
-}
-
 
 void PanelMethod::integrate_velocities(double wake_scale)
 {
@@ -705,4 +780,46 @@ void PanelMethod::transfer_solution_to_wake()
 	}
 
 }
+
+void PanelMethod::compute_phis()
+{
+	Eigen::ArrayXd phis_above(rhs.rows());
+	Eigen::ArrayXd phis_below(rhs.rows());
+
+	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
+	{
+		for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
+		{
+			for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
+			{
+				double phi_above = 0.0;
+				double phi_below = 0.0;
+				auto effect_idx = (Index)(effect + geom_sizes[effect_geom]);
+				// Effect of main panels
+				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
+				{
+					phi_above += induced_phi(*thin_wings[cause_geom], cause, *thin_wings[effect_geom], effect, true);
+					phi_below += induced_phi(*thin_wings[cause_geom], cause, *thin_wings[effect_geom], effect, false);
+				}
+				// Effect of wake panels
+				for(Index wake_cause = 0; wake_cause < thin_wings[cause_geom]->trailing_panels.cols(); wake_cause++)
+				{
+					phi_above += induced_phi_wake(wakes[cause_geom], wake_cause, *thin_wings[effect_geom], effect, true);
+					phi_below += induced_phi_wake(wakes[cause_geom], wake_cause, *thin_wings[effect_geom], effect, false);
+				}
+
+				phis_above(effect_idx) = phi_above;
+				phis_below(effect_idx) = phi_below;
+			}
+		}
+	}
+
+	phi_hist_above.push_front(phis_above);
+	phi_hist_below.push_front(phis_below);
+
+}
+
+
+
+
 

@@ -18,6 +18,9 @@ protected:
 
 	std::deque<Eigen::ArrayXd> sln_hist;
 
+	std::deque<Eigen::ArrayXd> phi_hist_above;
+	std::deque<Eigen::ArrayXd> phi_hist_below;
+
 	Eigen::ArrayXd cps;
 
 	// - normal . freestream, regenerated as needed
@@ -41,6 +44,13 @@ protected:
 
 	double induced_norm_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect,
 								 Eigen::Index effect_panel, const bool STEADY);
+
+	double induced_phi(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel,
+					   bool above);
+	double induced_phi_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel,
+							bool above);
+
+
 	void build_dynamic_matrix(const bool STEADY);
 	void build_rhs(const bool STEADY);
 
@@ -72,10 +82,23 @@ public:
 	Eigen::Vector3d induced_vel_verts(const Eigen::Matrix<double, 3, 4>& vertices,
 									  const Eigen::Vector3d& nrm,
 									  const Eigen::Vector3d& pos);
+
+	double induced_phi(const ThinWing& cause, Eigen::Index cause_panel, const Eigen::Vector3d& pos,
+					   bool above);
+	double induced_phi_wake(const Wake& wake, Eigen::Index cause_trailing, const Eigen::Vector3d& pos,
+						bool above);
+	double induced_phi_verts(const Eigen::Matrix<double, 3, 4>& vertices,
+							 	const Eigen::Vector3d& nrm,
+								const Eigen::Vector3d& pos, bool above);
+
 	// Warning: Do not modify after calling build_geometry_matrix()
 	std::vector<std::shared_ptr<ThinWing>> thin_wings;
 
 	void build_geometry_matrix();
+
+	// Pushes front into phis_history
+	void compute_phis();
+
 
 	// This "resets" all wakes to stationary condition,
 	// potentially resizing vertex counts (all wakes must have same panel count)
