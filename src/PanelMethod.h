@@ -45,9 +45,11 @@ protected:
 	double induced_norm_vel_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect,
 								 Eigen::Index effect_panel, const bool STEADY);
 
-	double induced_phi(const ThinWing& cause, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel,
+	// Uses latest solution!
+	double induced_phi(size_t cause_geom, Eigen::Index cause_panel, const ThinWing& effect, Eigen::Index effect_panel,
 					   bool above);
-	double induced_phi_wake(const Wake& wake, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel,
+	// Uses latest solution!
+	double induced_phi_wake(size_t cause_geom, Eigen::Index cause_trailing, const ThinWing& effect, Eigen::Index effect_panel,
 							bool above);
 
 
@@ -85,7 +87,7 @@ public:
 
 	double induced_phi(const ThinWing& cause, Eigen::Index cause_panel, const Eigen::Vector3d& pos,
 					   bool above);
-	double induced_phi_wake(const Wake& wake, Eigen::Index cause_trailing, const Eigen::Vector3d& pos,
+	double induced_phi_wake(size_t cause_geom, Eigen::Index cause_trailing, const Eigen::Vector3d& pos,
 						bool above);
 	double induced_phi_verts(const Eigen::Matrix<double, 3, 4>& vertices,
 							 	const Eigen::Vector3d& nrm,

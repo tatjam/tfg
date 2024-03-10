@@ -49,11 +49,13 @@ Eigen::Vector3d PanelMethod::induced_vel(const ThinWing &cause, Eigen::Index cau
 	return induced_vel(cause, cause_panel, center);
 }
 
-double PanelMethod::induced_phi(const ThinWing &cause, Eigen::Index cause_panel, const ThinWing &effect,
+double PanelMethod::induced_phi(size_t cause_geom, Eigen::Index cause_panel, const ThinWing &effect,
 								Eigen::Index effect_panel, bool above)
 {
 	Vector3d center = get_center(effect, effect_panel);
-	return induced_phi(cause, cause_panel, center, above);
+	auto cause_idx = (Index)(cause_panel + geom_sizes[cause_geom]);
+
+	return induced_phi(*thin_wings[cause_geom], cause_panel, center, above) * sln_hist.front()(cause_idx);
 }
 
 Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
@@ -63,11 +65,11 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 	return induced_vel_wake(wake, cause_trailing, center, MODE);
 }
 
-double PanelMethod::induced_phi_wake(const Wake &wake, Eigen::Index cause_trailing, const ThinWing &effect,
+double PanelMethod::induced_phi_wake(size_t cause_geom, Eigen::Index cause_trailing, const ThinWing &effect,
 									 Eigen::Index effect_panel, bool above)
 {
 	Vector3d center = get_center(effect, effect_panel);
-	return induced_phi_wake(wake, cause_trailing, center, above);
+	return induced_phi_wake(cause_geom, cause_trailing, center, above);
 }
 
 Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos,
@@ -101,11 +103,22 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 }
 
 
-double PanelMethod::induced_phi_wake(const Wake &wake, Eigen::Index cause_trailing, const Vector3d &pos, bool above)
+double PanelMethod::induced_phi_wake(size_t cause_geom, Eigen::Index cause_trailing, const Vector3d &pos, bool above)
 {
 	double acc = 0.0;
 	for(Index i = 0; i < num_wake_edges - 1; i++)
 	{
+		Index cause = thin_wings[cause_geom]->trailing_panels(cause_trailing);
+		auto cause_idx = (Index)(cause + geom_sizes[cause_geom]);
+		Index panel_idx = cause_trailing * (num_wake_edges - 1) + i;
+
+		const Wake& wake = wakes[cause_geom];
+
+		// Compute mu
+		double infl = wake.influences(panel_idx);
+		double mu = wake.mus(panel_idx) * (1.0 - infl);
+		mu += sln_hist.front()(cause_idx) * infl;
+
 		Matrix<double, 3, 4> verts;
 		Index cause_panel = cause_trailing * (num_wake_edges - 1) + i;
 		verts.col(0) = wake.vertices.col(wake.quads(0, cause_panel));
@@ -116,7 +129,7 @@ double PanelMethod::induced_phi_wake(const Wake &wake, Eigen::Index cause_traili
 		Vector3d nrm = wake.normals.col(cause_panel);
 		double val = induced_phi_verts(verts, nrm, pos, above);
 
-		acc += val;
+		acc += val * mu;
 	}
 	return acc;
 }
@@ -388,13 +401,63 @@ PanelMethod::induced_vel_verts(const Matrix<double, 3, 4> &vertices, const Vecto
 double PanelMethod::induced_phi_verts(const Matrix<double, 3, 4> &vertices, const Vector3d &nrm, const Vector3d &pos,
 									  bool above)
 {
-	// Taken from "Calculation of potential flow around arbitrary bodies", by Hess and Smith
 	// The doublet potential "happens" to match the induced normal velocity for a constant source sheet!
 	// (Normal to the source sheet)
+	// So we implement a "brute-force" way, by transforming into panel coordinates and back
+	Vector3d center = vertices.col(0).matrix();
+	center += vertices.col(1).matrix();
+	center += vertices.col(2).matrix();
+	center += vertices.col(3).matrix();
+	center /= 4.0;
 
+	Quaterniond quat; quat.setFromTwoVectors(nrm, Vector3d(0, 0, 1));
+	Isometry3d transform; transform.setIdentity();
 
+	transform = transform * quat * Translation3d(-center);
 
-	return 0;
+	// Transform the points into local coordinates
+	Vector3d p = transform * pos;
+	Vector3d p1 = transform * vertices.col(0).matrix();
+	Vector3d p2 = transform * vertices.col(1).matrix();
+	Vector3d p3 = transform * vertices.col(2).matrix();
+	Vector3d p4 = transform * vertices.col(3).matrix();
+
+	if(std::abs(p(2)) < 0.0000001)
+	{
+		p(2) = above ? 0.01 : -0.01;
+	}
+
+	double m12 = (p2(1) - p1(1)) / (p2(0) - p1(0));
+	double m23 = (p3(1) - p2(1)) / (p3(0) - p2(0));
+	double m34 = (p4(1) - p3(1)) / (p4(0) - p3(0));
+	double m41 = (p1(1) - p4(1)) / (p1(0) - p4(0));
+
+	double e1 = (p(0) - p1(0)) * (p(0) - p1(0)) + p(2) * p(2);
+	double e2 = (p(0) - p2(0)) * (p(0) - p2(0)) + p(2) * p(2);
+	double e3 = (p(0) - p3(0)) * (p(0) - p3(0)) + p(2) * p(2);
+	double e4 = (p(0) - p4(0)) * (p(0) - p4(0)) + p(2) * p(2);
+
+	double h1 = (p(0) - p1(0)) * (p(1) - p1(1));
+	double h2 = (p(0) - p2(0)) * (p(1) - p2(1));
+	double h3 = (p(0) - p3(0)) * (p(1) - p3(1));
+	double h4 = (p(0) - p4(0)) * (p(1) - p4(1));
+
+	double r1 = (p1 - p).norm();
+	double r2 = (p2 - p).norm();
+	double r3 = (p3 - p).norm();
+	double r4 = (p4 - p).norm();
+
+	double t1 = std::atan2(m12 * e1 - h1, p(2) * r1);
+	double t2 = std::atan2(m12 * e2 - h2, p(2) * r2);
+	double t3 = std::atan2(m23 * e2 - h2, p(2) * r2);
+	double t4 = std::atan2(m23 * e3 - h3, p(2) * r3);
+	double t5 = std::atan2(m34 * e3 - h3, p(2) * r3);
+	double t6 = std::atan2(m34 * e4 - h4, p(2) * r4);
+	double t7 = std::atan2(m41 * e4 - h4, p(2) * r4);
+	double t8 = std::atan2(m41 * e1 - h1, p(2) * r1);
+
+	double w = 1.0 / (4.0 * M_PI) * (t1 - t2 + t3 - t4 + t5 - t6 + t7 - t8);
+	return w;
 }
 
 Eigen::Vector3d PanelMethod::get_center(const ThinWing &wing, Eigen::Index wing_panel)
@@ -798,14 +861,14 @@ void PanelMethod::compute_phis()
 				// Effect of main panels
 				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
 				{
-					phi_above += induced_phi(*thin_wings[cause_geom], cause, *thin_wings[effect_geom], effect, true);
-					phi_below += induced_phi(*thin_wings[cause_geom], cause, *thin_wings[effect_geom], effect, false);
+					phi_above += induced_phi(cause_geom, cause, *thin_wings[effect_geom], effect, true);
+					phi_below += induced_phi(cause_geom, cause, *thin_wings[effect_geom], effect, false);
 				}
 				// Effect of wake panels
 				for(Index wake_cause = 0; wake_cause < thin_wings[cause_geom]->trailing_panels.cols(); wake_cause++)
 				{
-					phi_above += induced_phi_wake(wakes[cause_geom], wake_cause, *thin_wings[effect_geom], effect, true);
-					phi_below += induced_phi_wake(wakes[cause_geom], wake_cause, *thin_wings[effect_geom], effect, false);
+					phi_above += induced_phi_wake(cause_geom, wake_cause, *thin_wings[effect_geom], effect, true);
+					phi_below += induced_phi_wake(cause_geom, wake_cause, *thin_wings[effect_geom], effect, false);
 				}
 
 				phis_above(effect_idx) = phi_above;
