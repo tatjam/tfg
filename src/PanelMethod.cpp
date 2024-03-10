@@ -422,9 +422,15 @@ double PanelMethod::induced_phi_verts(const Matrix<double, 3, 4> &vertices, cons
 	Vector3d p3 = transform * vertices.col(2).matrix();
 	Vector3d p4 = transform * vertices.col(3).matrix();
 
-	if(std::abs(p(2)) < 0.0000001)
+	// We are very near the centroid, in that case we use quick method
+	if(std::abs(p(2)) < 0.0001)
 	{
-		p(2) = above ? 0.01 : -0.01;
+
+		// Inside quadrilateral
+		return 0.5;
+
+		// Outside quadrilateral
+		return 0.0;
 	}
 
 	double m12 = (p2(1) - p1(1)) / (p2(0) - p1(0));
@@ -880,6 +886,26 @@ void PanelMethod::compute_phis()
 	phi_hist_above.push_front(phis_above);
 	phi_hist_below.push_front(phis_below);
 
+}
+
+std::string PanelMethod::phis_to_string(size_t for_geom, bool include_freestream, bool above)
+{
+	std::stringstream o;
+	if(include_freestream)
+	{
+		// TODO: Implement
+		abort();
+	}
+
+	if(above)
+	{
+		o << phi_hist_above.front().block(geom_sizes[for_geom], 0, geom_sizes[for_geom + 1], 1).transpose();
+	}
+	else
+	{
+		o << phi_hist_below.front().block(geom_sizes[for_geom], 0, geom_sizes[for_geom + 1], 1).transpose();
+	}
+	return o.str();
 }
 
 

@@ -143,8 +143,9 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 32, 20.0, 0.25);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 16, 1.0, 0.25);
 	geom->generate_normals();
+	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 
 	write_params();
 	long_term_steady_case(geom);
@@ -166,5 +167,7 @@ int main()
 	iterate_oscillating_case(steady, dynamic, true, t);
 
 	write_string_to_file("workdir/mat.dat", steady.geometry_matrix_to_string());
+	write_string_to_file("workdir/phis_above.dat", dynamic.phis_to_string(0, false, true));
+	write_string_to_file("workdir/phis_below.dat", dynamic.phis_to_string(0, false, false));
 
 }

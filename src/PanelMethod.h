@@ -126,6 +126,9 @@ public:
 	//  set as in wake_geom_to_string)
 	std::string wake_solution_to_string(size_t for_geom);
 
+	// (Use Import["...", "Table"][[1]] to import it in Mathematica)
+	std::string phis_to_string(size_t for_geom, bool include_freestream, bool above);
+
 	void compute_cps(bool STEADY);
 
 	void timestep(const Eigen::Vector3d& cur_vel, const Eigen::Vector3d& cur_angvel);
