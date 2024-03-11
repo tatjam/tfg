@@ -14,8 +14,8 @@ const size_t NPANELS = 50;
 const double TSTEP = 0.025;
 const size_t MAX_IT = NPANELS * 4;
 
-const double HEAVE_AMPL = 0.06;
-const double HEAVE_OMEGA = 4.0;
+const double HEAVE_AMPL = 0.001;
+const double HEAVE_OMEGA = 1.0;
 
 const bool USE_CENTERLINE = true;
 
@@ -143,7 +143,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 16, 1.0, 0.25);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 32, 10.0, 0.25);
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 

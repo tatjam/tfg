@@ -314,7 +314,7 @@ void PanelMethod::solve(bool STEADY)
 
 	if(!STEADY)
 	{
-		compute_phis();
+		//compute_phis();
 	}
 
 	if(STEADY)
@@ -404,6 +404,7 @@ double PanelMethod::induced_phi_verts(const Matrix<double, 3, 4> &vertices, cons
 	// The doublet potential "happens" to match the induced normal velocity for a constant source sheet!
 	// (Normal to the source sheet)
 	// So we implement a "brute-force" way, by transforming into panel coordinates and back
+	// Taken from https://github.com/byuflowlab/FLOWPanel.jl
 	Vector3d center = vertices.col(0).matrix();
 	center += vertices.col(1).matrix();
 	center += vertices.col(2).matrix();
@@ -417,52 +418,82 @@ double PanelMethod::induced_phi_verts(const Matrix<double, 3, 4> &vertices, cons
 
 	// Transform the points into local coordinates
 	Vector3d p = transform * pos;
-	Vector3d p1 = transform * vertices.col(0).matrix();
-	Vector3d p2 = transform * vertices.col(1).matrix();
-	Vector3d p3 = transform * vertices.col(2).matrix();
-	Vector3d p4 = transform * vertices.col(3).matrix();
 
-	// We are very near the centroid, in that case we use quick method
-	if(std::abs(p(2)) < 0.0001)
+	if(std::abs(p(2)) < 0.001)
 	{
+		bool all_pos = true;
 
-		// Inside quadrilateral
-		return 0.5;
+		for(Index i = 0; i < 4; i++)
+		{
+			Vector3d pi = transform * vertices.col(i).matrix();
+			Index next_i = i + 1;
+			if(next_i == 4) next_i = 0;
+			Vector3d pj = transform * vertices.col(i + 1).matrix();
 
-		// Outside quadrilateral
-		return 0.0;
+			double dij = (pj - pi).norm();
+			double ri = (p - pi).norm();
+			double rj = (p - pj).norm();
+
+			double Qij = std::log((ri + rj + dij)/(ri + rj - dij + 0.001));
+
+			double Sij = (pj(1) - pi(1)) / dij;
+			double Cij = (pj(0) - pi(0)) / dij;
+
+			double siji = (pi(0) - p(0)) * Cij + (pi(1) - p(1)) * Sij;
+			double sijj = (pj(0) - p(0)) * Cij + (pj(1) - p(1)) * Sij;
+			double Rij = (p(0) - pi(0)) * Sij - (p(1) - pi(1)) * Cij;
+
+			if(Rij < 0)
+			{
+				all_pos = false;
+				break;
+			}
+		}
+
+		if(all_pos)
+		{
+			// Inside
+			return above ? 0.5 : -0.5;
+		}
+		else
+		{
+			// Outside
+			return 0.0;
+		}
+
 	}
 
-	double m12 = (p2(1) - p1(1)) / (p2(0) - p1(0));
-	double m23 = (p3(1) - p2(1)) / (p3(0) - p2(0));
-	double m34 = (p4(1) - p3(1)) / (p4(0) - p3(0));
-	double m41 = (p1(1) - p4(1)) / (p1(0) - p4(0));
+	double w = 0.0;
+	double dtheta = 2.0 * M_PI;
+	for(Index i = 0; i < 4; i++)
+	{
+		Vector3d pi = transform * vertices.col(i).matrix();
+		Index next_i = i + 1;
+		if(next_i == 4) next_i = 0;
+		Vector3d pj = transform * vertices.col(i + 1).matrix();
 
-	double e1 = (p(0) - p1(0)) * (p(0) - p1(0)) + p(2) * p(2);
-	double e2 = (p(0) - p2(0)) * (p(0) - p2(0)) + p(2) * p(2);
-	double e3 = (p(0) - p3(0)) * (p(0) - p3(0)) + p(2) * p(2);
-	double e4 = (p(0) - p4(0)) * (p(0) - p4(0)) + p(2) * p(2);
+		double dij = (pj - pi).norm();
+		double ri = (p - pi).norm();
+		double rj = (p - pj).norm();
 
-	double h1 = (p(0) - p1(0)) * (p(1) - p1(1));
-	double h2 = (p(0) - p2(0)) * (p(1) - p2(1));
-	double h3 = (p(0) - p3(0)) * (p(1) - p3(1));
-	double h4 = (p(0) - p4(0)) * (p(1) - p4(1));
+		double Qij = std::log((ri + rj + dij)/(ri + rj - dij + 0.001));
 
-	double r1 = (p1 - p).norm();
-	double r2 = (p2 - p).norm();
-	double r3 = (p3 - p).norm();
-	double r4 = (p4 - p).norm();
+		double Sij = (pj(1) - pi(1)) / dij;
+		double Cij = (pj(0) - pi(0)) / dij;
 
-	double t1 = std::atan2(m12 * e1 - h1, p(2) * r1);
-	double t2 = std::atan2(m12 * e2 - h2, p(2) * r2);
-	double t3 = std::atan2(m23 * e2 - h2, p(2) * r2);
-	double t4 = std::atan2(m23 * e3 - h3, p(2) * r3);
-	double t5 = std::atan2(m34 * e3 - h3, p(2) * r3);
-	double t6 = std::atan2(m34 * e4 - h4, p(2) * r4);
-	double t7 = std::atan2(m41 * e4 - h4, p(2) * r4);
-	double t8 = std::atan2(m41 * e1 - h1, p(2) * r1);
+		double siji = (pi(0) - p(0)) * Cij + (pi(1) - p(1)) * Sij;
+		double sijj = (pj(0) - p(0)) * Cij + (pj(1) - p(1)) * Sij;
+		double Rij = (p(0) - pi(0)) * Sij - (p(1) - pi(1)) * Cij;
 
-	double w = 1.0 / (4.0 * M_PI) * (t1 - t2 + t3 - t4 + t5 - t6 + t7 - t8);
+		double Jij = std::atan2( Rij * std::abs(p(2)) * ( ri * sijj - rj * siji),
+								 ri * rj * Rij * Rij + p(2) * p(2) * sijj * siji);
+
+		w -= 1.0 / (4.0 * M_PI) * (Rij * Qij + std::abs(p(2)) * Jij);
+		dtheta *= Rij >= 0.0 ? 1.0 : 0.0;
+	}
+
+	w += (1.0) / (4.0 * M_PI) * std::abs(p(2)) * dtheta;
+
 	return w;
 }
 
@@ -723,30 +754,28 @@ void PanelMethod::compute_cps(bool STEADY)
 
 			Index panel_idx = geom_sizes[effect_geom] + effect;
 
-			cps(panel_idx) = -2.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+			cps(panel_idx) = -4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
 			if(!STEADY)
 			{
 				// backward differences for phi evolution
-				double partial_phi_above = 0.0;
-				double partial_phi_below = 0.0;
+				// which is roughly equal to mu evolution (see tfg writeup)
+				double partial_mu = 0.0;
 				double sgn = 1.0;
-				if(phi_hist_above.size() == 0 && !message_put)
+				if(sln_hist.size() == 0 && !message_put)
 				{
+					std::cout << "WARNING: No sln_history!" << std::endl;
 					message_put = true;
-					std::cout << "WARNING: No phi history, remember to call compute_phis()" << std::endl;
 				}
-				for(size_t i = 0; i < phi_hist_above.size(); i++)
+				for(size_t i = 0; i < sln_hist.size(); i++)
 				{
-					partial_phi_above += sgn * (double)binom(phi_hist_above.size() - 1, i) * phi_hist_above[i](panel_idx);
-					partial_phi_below += sgn * (double)binom(phi_hist_below.size() - 1, i) * phi_hist_below[i](panel_idx);
+					partial_mu += sgn * (double)binom(sln_hist.size() - 1, i) * sln_hist[i](panel_idx);
 					sgn *= -1.0;
 				}
 
 				// wake_scale is our timestep in essence
-				partial_phi_above /= std::pow(wake_scale, sln_hist.size() - 1);
-				partial_phi_below /= std::pow(wake_scale, sln_hist.size() - 1);
+				partial_mu /= std::pow(wake_scale, sln_hist.size() - 1);
 
-				cps(panel_idx) += 2.0 * (partial_phi_above - partial_phi_below) / freestream.squaredNorm();
+				cps(panel_idx) += 2.0 * partial_mu / freestream.squaredNorm();
 			}
 		}
 	}
