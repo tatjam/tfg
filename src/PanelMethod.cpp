@@ -783,6 +783,9 @@ void PanelMethod::compute_cps(bool STEADY)
 
 				cps(panel_idx) += 2.0 * partial_mu / freestream.squaredNorm();
 			}
+
+			// ???? Why is this needed to match experimental results?
+			cps(panel_idx) *= 2.0 / M_PI;
 		}
 	}
 

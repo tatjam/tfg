@@ -88,17 +88,22 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 64, 10.0, 1.0);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 64, 30.0, 1.0);
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 
 	for(double AoA = -0.4; AoA < 0.4; AoA += 0.1)
 	{
-		ArrayXd prandtl = ThinWing::lifting_line_solve(chord_fx, 64 - 1, 10.0, 1.0, AoA);
+		auto pair = ThinWing::lifting_line_solve(chord_fx, 64 - 1, 30.0, 1.0, AoA);
 		{
 			std::stringstream s;
-			s << prandtl.transpose();
+			s << pair.first.transpose();
 			write_string_to_file(make_fname(AoA, "prandtl"), s.str());
+		}
+		{
+			std::stringstream s;
+			s << pair.second.transpose();
+			write_string_to_file(make_fname(AoA, "An"), s.str());
 		}
 		long_term_steady_case(geom, AoA);
 	}

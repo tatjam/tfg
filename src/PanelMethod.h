@@ -135,6 +135,8 @@ public:
 
 	// Requires cps to be computed
 	// centerline_pos = -1 means center
+	// centerline = true: returns integral cp dx [units of non-dimensional force per unit span]
+	// centerline = false: returns integral cp dx dy [units of non-dimensional force]
 	Eigen::Vector3d compute_aero_force(bool centerline, int centerline_pos = -1);
 
 	std::string wake_geom_to_string(size_t for_geom);
