@@ -24,6 +24,11 @@ public:
 	// Mostly 0s except for panels near trailing edge or very fast movement
 	Eigen::ArrayXd influences;
 
+	// If starting wake is simulated, this is how many panels
+	// are to actually be used
+	int num_shed;
+	bool enable_shedding;
+
 	void build_from_history(const ThinWing& wing, const PanelMethod& method);
 
 	// Doesn't actually lay out the vertices, but creates them

@@ -7,11 +7,11 @@ using namespace Eigen;
 
 const double ADVANCE_VEL = 1.0;
 const size_t LONG_TERM_NPANELS = 200;
-const double LONG_TERM_AOA = 0.1;
+const double LONG_TERM_AOA = 0.01;
 
-const size_t NPANELS = 50;
-const double TSTEP = 0.025;
-const size_t MAX_IT = NPANELS * 4;
+const size_t NPANELS = 100;
+const double TSTEP = 0.02;
+const size_t MAX_IT = NPANELS;
 
 const bool USE_CENTERLINE = true;
 
@@ -63,8 +63,9 @@ void prepare_wagner_case(std::shared_ptr<ThinWing> wing, PanelMethod& dynamic)
 	dynamic.build_dynamic(true);
 	dynamic.solve(true);
 	dynamic.transfer_solution_to_wake();
-	// Initial phi computation so first time-step can compute cps
-	dynamic.compute_phis();
+	// Even though we have a wake, assume it doesn't exist at first
+	dynamic.wakes[0].enable_shedding = true;
+	dynamic.wakes[0].num_shed = 0;
 }
 
 void iterate_wagner_case(PanelMethod& dynamic, double& t)
@@ -80,6 +81,14 @@ void iterate_wagner_case(PanelMethod& dynamic, double& t)
 		dynamic.compute_cps(false);
 		forces(i) = dynamic.compute_aero_force(USE_CENTERLINE)(1);
 		t += TSTEP;
+
+		// Shed wake
+		dynamic.wakes[0].num_shed++;
+		std::cout << dynamic.wakes[0].num_shed << std::endl;
+		if(dynamic.wakes[0].num_shed > dynamic.num_wake_edges - 1)
+		{
+			dynamic.wakes[0].num_shed = dynamic.num_wake_edges - 1;
+		}
 	}
 
 	{

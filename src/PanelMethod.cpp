@@ -76,7 +76,7 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 											  const int MODE)
 {
 	Vector3d acc = Vector3d(0, 0, 0);
-	for(Index i = 0; i < num_wake_edges - 1; i++)
+	for(Index i = 0; i < wake.num_shed; i++)
 	{
 		Matrix<double, 3, 4> verts;
 		Index cause_panel = cause_trailing * (num_wake_edges - 1) + i;
@@ -106,13 +106,13 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 double PanelMethod::induced_phi_wake(size_t cause_geom, Eigen::Index cause_trailing, const Vector3d &pos, bool above)
 {
 	double acc = 0.0;
-	for(Index i = 0; i < num_wake_edges - 1; i++)
+	const Wake& wake = wakes[cause_geom];
+	for(Index i = 0; i < wake.num_shed; i++)
 	{
 		Index cause = thin_wings[cause_geom]->trailing_panels(cause_trailing);
 		auto cause_idx = (Index)(cause + geom_sizes[cause_geom]);
 		Index panel_idx = cause_trailing * (num_wake_edges - 1) + i;
 
-		const Wake& wake = wakes[cause_geom];
 
 		// Compute mu
 		double infl = wake.influences(panel_idx);
@@ -517,16 +517,21 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 	return 0.5 * (v2 - v1).cross(v3 - v1).norm() + 0.5 * (v4 - v2).cross(v4 - v3).norm();
 }
 
-Eigen::Vector3d PanelMethod::compute_aero_force(bool centerline)
+Eigen::Vector3d PanelMethod::compute_aero_force(bool centerline, int center_line_pos)
 {
 	Vector3d acc;
 	acc.setZero();
 
 	if (centerline)
 	{
+		if(center_line_pos < 0 || center_line_pos >= thin_wings[0]->num_spanwise - 1)
+		{
+			center_line_pos = thin_wings[0]->num_spanwise / 2;
+		}
+
 		for (Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
 		{
-			Index idx = thin_wings[0]->num_spanwise / 2 * (thin_wings[0]->num_chorwise - 1) + i;
+			Index idx = center_line_pos * (thin_wings[0]->num_chorwise - 1) + i;
 			Vector3d nrm = thin_wings[0]->normals.col(idx);
 			double area = get_area(*thin_wings[0], idx);
 			Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(0, idx));
@@ -755,6 +760,7 @@ void PanelMethod::compute_cps(bool STEADY)
 			Index panel_idx = geom_sizes[effect_geom] + effect;
 
 			cps(panel_idx) = -4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
+
 			if(!STEADY)
 			{
 				// backward differences for phi evolution

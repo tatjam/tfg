@@ -33,10 +33,16 @@ void Wake::build_initial_geometry(const ThinWing &wing, const PanelMethod &metho
 		}
 	}
 
+	num_shed = 0;
+	enable_shedding = false;
+
 }
 
 void Wake::build_from_history(const ThinWing &wing, const PanelMethod& panels)
 {
+	if(!enable_shedding)
+		num_shed = panels.num_wake_edges - 1;
+
 	size_t num_trailing_edge = wing.trailing_edge.rows();
 	// We start at the last stored time-step and progress forwards
 	for(Index zi = 1; zi < panels.num_wake_edges; zi++)

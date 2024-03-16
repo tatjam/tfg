@@ -32,4 +32,10 @@ public:
 											  size_t num_chordwise, size_t num_spanwise,
 											  double span, double chord_scale);
 
+	// Solve the wing assuming it's made of flat airfoils (2pi cl_alpha) sized accoding
+	// to the chord_fx. All airfoils are assumed to be symmetric and lay flat
+	// NOTE THAT CHORD LINE IS IGNORED!
+	// Returns lift coefficient at each section, distributed according to cosine sampling
+	static Eigen::ArrayXd lifting_line_solve(ChordFx chord_fx, size_t num_spanwise, double span, double chord_scale, double AoA);
+
 };

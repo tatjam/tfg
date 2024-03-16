@@ -113,3 +113,66 @@ ThinWing::generate(std::function<std::pair<double, double>(double)> chord_fx,
 
 	return out;
 }
+
+#include <iostream>
+
+ArrayXd
+ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, double span, double chord_scale, double AoA)
+{
+	MatrixXd solve_mat = MatrixXd(num_spanwise, num_spanwise);
+	ArrayXd rhs = ArrayXd(num_spanwise);
+	// RHS is very simple, 2pia
+	rhs.setConstant(2.0 * M_PI * AoA);
+
+	// Build coefficients at each point
+	for(size_t i = 0; i < num_spanwise; i++)
+	{
+		double theta = M_PI * (double)i / (double)(num_spanwise - 1);
+		double c = chord_fx(-0.5 * std::cos(theta)).first;
+
+		for(size_t n = 1; n <= num_spanwise; n++)
+		{
+			double a = (4.0 * span / c) * sin((double)n * theta);
+			if(i != 0 && i != num_spanwise - 1)
+			{
+				a += 2.0 * M_PI * n * sin((double)n * theta) / sin(theta);
+			}
+			else
+			{
+				double term = 2.0 * M_PI * n * n;
+				double sign = 1.0;
+				if(i == num_spanwise - 1 && n % 2 == 0)
+				{
+					sign = -1.0;
+				}
+
+				a += sign * term;
+
+			}
+
+			solve_mat(i, n - 1) = a;
+		}
+	}
+
+std::cout << solve_mat;
+
+	ArrayXd An = solve_mat.fullPivLu().solve(rhs.matrix());
+
+	std::cout << An << std::endl;
+
+	// Reconstruct lift
+	ArrayXd lift = ArrayXd(num_spanwise);
+	lift.setConstant(4.0 * span);
+	for(size_t i = 0; i < num_spanwise; i++)
+	{
+		double sum = 0.0;
+		double theta = M_PI * (double)i / (double)(num_spanwise - 1);
+		for(size_t n = 1; n <= num_spanwise; n++)
+		{
+			sum += An(n - 1) * sin((double)n * theta);
+		}
+		lift(i) *= sum;
+	}
+
+	return lift;
+}
