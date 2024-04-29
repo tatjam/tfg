@@ -396,6 +396,7 @@ PanelMethod::induced_vel_verts(const Matrix<double, 3, 4> &vertices, const Vecto
 	out /= 4.0 * M_PI;
 
 	return out;
+
 }
 
 double PanelMethod::induced_phi_verts(const Matrix<double, 3, 4> &vertices, const Vector3d &nrm, const Vector3d &pos,
@@ -517,408 +518,408 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 	return 0.5 * (v2 - v1).cross(v3 - v1).norm() + 0.5 * (v4 - v2).cross(v4 - v3).norm();
 }
 
-Eigen::Vector3d PanelMethod::compute_aero_force(bool centerline, int center_line_pos)
-{
-	Vector3d acc;
-	acc.setZero();
-
-	if (centerline)
+	Eigen::Vector3d PanelMethod::compute_aero_force(bool centerline, int center_line_pos)
 	{
-		if(center_line_pos < 0 || center_line_pos >= thin_wings[0]->num_spanwise - 1)
-		{
-			center_line_pos = thin_wings[0]->num_spanwise / 2;
-		}
+		Vector3d acc;
+		acc.setZero();
 
-		for (Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
+		if (centerline)
 		{
-			Index idx = center_line_pos * (thin_wings[0]->num_chorwise - 1) + i;
-			Vector3d nrm = thin_wings[0]->normals.col(idx);
-			double area = get_area(*thin_wings[0], idx);
-			Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(0, idx));
-			Vector3d b = thin_wings[0]->vertices.col(thin_wings[0]->quads(3, idx));
-			double length = (b - a).norm();
-			Vector3d force = nrm * cps(idx);
-			acc += force * length;
-		}
-	}
-	else
-	{
-		for(size_t geom = 0; geom < thin_wings.size(); geom++)
-		{
-			for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
+			if(center_line_pos < 0 || center_line_pos >= thin_wings[0]->num_spanwise - 1)
 			{
-				Vector3d nrm = thin_wings[geom]->normals.col(panel);
-				double area = get_area(*thin_wings[geom], panel);
+				center_line_pos = thin_wings[0]->num_spanwise / 2;
+			}
 
-				Vector3d force = nrm * cps(geom_sizes[geom] + panel);
-				acc += force * area;
+			for (Index i = 0; i < thin_wings[0]->num_chorwise - 1; i++)
+			{
+				Index idx = center_line_pos * (thin_wings[0]->num_chorwise - 1) + i;
+				Vector3d nrm = thin_wings[0]->normals.col(idx);
+				double area = get_area(*thin_wings[0], idx);
+				Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(0, idx));
+				Vector3d b = thin_wings[0]->vertices.col(thin_wings[0]->quads(3, idx));
+				double length = (b - a).norm();
+				Vector3d force = nrm * cps(idx);
+				acc += force * length;
 			}
 		}
+		else
+		{
+			for(size_t geom = 0; geom < thin_wings.size(); geom++)
+			{
+				for(Index panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
+				{
+					Vector3d nrm = thin_wings[geom]->normals.col(panel);
+					double area = get_area(*thin_wings[geom], panel);
+
+					Vector3d force = nrm * cps(geom_sizes[geom] + panel);
+					acc += force * area;
+				}
+			}
+		}
+		return acc;
 	}
-	return acc;
-}
 
-std::string
-PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vector3d y_axis,
-										 size_t num_x, size_t num_y)
-{
-	std::stringstream o;
-	o << std::fixed;
-	o << "{";
-
-	for(size_t y = 0; y < num_y; y++)
+	std::string
+	PanelMethod::sample_flow_field_to_string(Vector3d corner, Vector3d x_axis, Vector3d y_axis,
+											 size_t num_x, size_t num_y)
 	{
+		std::stringstream o;
+		o << std::fixed;
 		o << "{";
-		for(size_t x = 0; x < num_x; x++)
+
+		for(size_t y = 0; y < num_y; y++)
 		{
-			double xpos = (double)x / ((double)num_x - 1.0);
-			double ypos = (double)y / ((double)num_y - 1.0);
-			Vector3d pos = corner + x_axis * xpos + y_axis * ypos;
-
-			Vector3d total_ind; total_ind.setZero();
-			Vector3d freestream = -vel_history.front();
-			freestream -= angvel_history.front().cross(pos);
-
-			for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
-			{
-				// Panel effect
-				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
-				{
-					Vector3d ind = induced_vel(*thin_wings[cause_geom], cause, pos);
-					ind *= sln_hist.front()(geom_sizes[cause_geom] + cause);
-					total_ind += ind;
-				}
-				// Wake effect
-				for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
-				{
-					Vector3d ind = induced_vel_wake(wakes[cause_geom], trail_cause, pos, 2);
-					// NOTE: Mode 2 already premultiplies by the correct mu value
-					total_ind += ind;
-				}
-			}
-
-			Vector3d total = freestream + total_ind;
-
 			o << "{";
-			o << total(0);
-			o << ",";
-			o << total(1);
-			o << ",";
-			o << total(2);
+			for(size_t x = 0; x < num_x; x++)
+			{
+				double xpos = (double)x / ((double)num_x - 1.0);
+				double ypos = (double)y / ((double)num_y - 1.0);
+				Vector3d pos = corner + x_axis * xpos + y_axis * ypos;
+
+				Vector3d total_ind; total_ind.setZero();
+				Vector3d freestream = -vel_history.front();
+				freestream -= angvel_history.front().cross(pos);
+
+				for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
+				{
+					// Panel effect
+					for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
+					{
+						Vector3d ind = induced_vel(*thin_wings[cause_geom], cause, pos);
+						ind *= sln_hist.front()(geom_sizes[cause_geom] + cause);
+						total_ind += ind;
+					}
+					// Wake effect
+					for(Index trail_cause = 0; trail_cause < thin_wings[cause_geom]->trailing_panels.rows(); trail_cause++)
+					{
+						Vector3d ind = induced_vel_wake(wakes[cause_geom], trail_cause, pos, 2);
+						// NOTE: Mode 2 already premultiplies by the correct mu value
+						total_ind += ind;
+					}
+				}
+
+				Vector3d total = freestream + total_ind;
+
+				o << "{";
+				o << total(0);
+				o << ",";
+				o << total(1);
+				o << ",";
+				o << total(2);
+				o << "}";
+				if(x != num_x - 1)
+					o << ",";
+			}
 			o << "}";
-			if(x != num_x - 1)
+			if(y != num_y - 1)
 				o << ",";
 		}
+
 		o << "}";
-		if(y != num_y - 1)
-			o << ",";
+		return o.str();
 	}
 
-	o << "}";
-	return o.str();
-}
-
-// Source: https://stackoverflow.com/a/44719219
-constexpr inline size_t binom(size_t n, size_t k) noexcept
-{
-	return
-			(        k> n  )? 0 :          // out of range
-			(k==0 || k==n  )? 1 :          // edge
-			(k==1 || k==n-1)? n :          // first
-			binom(n - 1, k - 1) * n / k;   // recursive
-}
-
-
-void PanelMethod::compute_cps(bool STEADY)
-{
-	assert(sln_hist.size() > 1 || STEADY);
-
-	Eigen::ArrayXd& solution = sln_hist.front();
-	bool message_put = false;
-
-	// TODO: This could be improved much by caching weighted averages
-	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
+	// Source: https://stackoverflow.com/a/44719219
+	constexpr inline size_t binom(size_t n, size_t k) noexcept
 	{
-		const ThinWing& tw = *thin_wings[effect_geom];
-		for (Index effect = 0; effect < tw.quads.cols(); effect++)
+		return
+				(        k> n  )? 0 :          // out of range
+				(k==0 || k==n  )? 1 :          // edge
+				(k==1 || k==n-1)? n :          // first
+				binom(n - 1, k - 1) * n / k;   // recursive
+	}
+
+
+	void PanelMethod::compute_cps(bool STEADY)
+	{
+		assert(sln_hist.size() > 1 || STEADY);
+
+		Eigen::ArrayXd& solution = sln_hist.front();
+		bool message_put = false;
+
+		// TODO: This could be improved much by caching weighted averages
+		for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 		{
-			Vector3d center = get_center(tw, effect);
-			Vector3d normal = tw.normals.col(effect);
-
-			// TODO: Signs
-			Vector3d freestream = -vel_history.front();
-			freestream -= angvel_history.front().cross(center);
-
-			Array4d areas; areas.setZero();
-			Array4d mus; mus.setZero();
-
-			double self_area = get_area(tw, effect);
-			double self_sol = solution(geom_sizes[effect_geom] + effect);
-
-			// Compute area-weighted average of mu at each node of the quadrilateral,
-			// exploting the mesh structure
-			for(Index vert = 0; vert < 4; vert++)
+			const ThinWing& tw = *thin_wings[effect_geom];
+			for (Index effect = 0; effect < tw.quads.cols(); effect++)
 			{
-				// Self contribution
-				areas(vert) += self_area;
-				mus(vert) += self_sol * self_area;
+				Vector3d center = get_center(tw, effect);
+				Vector3d normal = tw.normals.col(effect);
 
-				Index vert_idx = tw.quads(vert, effect);
-				for(Index nbor = 0; nbor < 8; nbor++)
+				// TODO: Signs
+				Vector3d freestream = -vel_history.front();
+				// Non-dimensional freestream doesn't include angular velocity component!
+				Vector3d ref_freestream = freestream;
+				freestream -= angvel_history.front().cross(center);
+
+				Array4d areas; areas.setZero();
+				Array4d mus; mus.setZero();
+
+				double self_area = get_area(tw, effect);
+				double self_sol = solution(geom_sizes[effect_geom] + effect);
+
+				// Compute area-weighted average of mu at each node of the quadrilateral,
+				// exploting the mesh structure
+				for(Index vert = 0; vert < 4; vert++)
 				{
-					Index nbor_idx = tw.neighbors(nbor, effect);
-					if(nbor_idx < 0)
-						continue;
+					// Self contribution
+					areas(vert) += self_area;
+					mus(vert) += self_sol * self_area;
 
-					// Check that the neighbor also contains this vertex
-					// TODO: This is technically not needed in such a structured mesh!
-					bool has_vert = false;
-					for(Index svert = 0; svert < 4; svert++)
+					Index vert_idx = tw.quads(vert, effect);
+					for(Index nbor = 0; nbor < 8; nbor++)
 					{
-						Index vidx = tw.quads(svert, nbor_idx);
-						if(vidx == vert_idx)
+						Index nbor_idx = tw.neighbors(nbor, effect);
+						if(nbor_idx < 0)
+							continue;
+
+						// Check that the neighbor also contains this vertex
+						// TODO: This is technically not needed in such a structured mesh!
+						bool has_vert = false;
+						for(Index svert = 0; svert < 4; svert++)
 						{
-							has_vert = true;
-							break;
+							Index vidx = tw.quads(svert, nbor_idx);
+							if(vidx == vert_idx)
+							{
+								has_vert = true;
+								break;
+							}
 						}
+
+						if(!has_vert)
+							continue;
+
+						double area = get_area(tw, nbor_idx);
+						areas(vert) += area;
+						mus(vert) += area * solution(geom_sizes[effect_geom] + nbor_idx);
+
 					}
 
-					if(!has_vert)
-						continue;
-
-					double area = get_area(tw, nbor_idx);
-					areas(vert) += area;
-					mus(vert) += area * solution(geom_sizes[effect_geom] + nbor_idx);
-
+					mus(vert) /= areas(vert);
 				}
 
-				mus(vert) /= areas(vert);
-			}
+				// We know mu at each of the quadrilateral corners, and at its center
+				// For convenience, we will project the quadrilateral into a flat plane,
+				// (assuming it's flat, small error) such that the normal vector points
+				// in the z direction, and the quadrilateral is contained in the x/y plane
 
-			// We know mu at each of the quadrilateral corners, and at its center
-			// For convenience, we will project the quadrilateral into a flat plane,
-			// (assuming it's flat, small error) such that the normal vector points
-			// in the z direction, and the quadrilateral is contained in the x/y plane
+				// Because we don't really care about the orientation of x and y, we can simply
+				// use the axis-to-axis rotation quaternion
+				Quaterniond quat; quat.setFromTwoVectors(normal, Vector3d(0, 0, 1));
+				Isometry3d transform; transform.setIdentity();
 
-			// Because we don't really care about the orientation of x and y, we can simply
-			// use the axis-to-axis rotation quaternion
-			Quaterniond quat; quat.setFromTwoVectors(normal, Vector3d(0, 0, 1));
-			Isometry3d transform; transform.setIdentity();
+				Isometry3d tinv = (transform * quat).inverse();
+				// Note that this implies that quat is applied before the translation!
+				transform = transform * quat * Translation3d(-center);
 
-			Isometry3d tinv = (transform * quat).inverse();
-			// Note that this implies that quat is applied before the translation!
-			transform = transform * quat * Translation3d(-center);
+				// Now the center of the quadrilateral is at its origin, and its vertices
+				// can be assumed to lay flat on the plane (up to a good approximation)
+				Matrix<double, 3, 5> ps;
+				ps.col(0) = transform * tw.transform * tw.vertices.col(tw.quads(0, effect));
+				ps.col(1) = transform * tw.transform * tw.vertices.col(tw.quads(1, effect));
+				ps.col(2) = transform * tw.transform * tw.vertices.col(tw.quads(2, effect));
+				ps.col(3) = transform * tw.transform * tw.vertices.col(tw.quads(3, effect));
+				// Center point
+				ps.col(4) = Vector3d(0, 0, 0);
 
-			// Now the center of the quadrilateral is at its origin, and its vertices
-			// can be assumed to lay flat on the plane (up to a good approximation)
-			Matrix<double, 3, 5> ps;
-			ps.col(0) = transform * tw.transform * tw.vertices.col(tw.quads(0, effect));
-			ps.col(1) = transform * tw.transform * tw.vertices.col(tw.quads(1, effect));
-			ps.col(2) = transform * tw.transform * tw.vertices.col(tw.quads(2, effect));
-			ps.col(3) = transform * tw.transform * tw.vertices.col(tw.quads(3, effect));
-			// Center point
-			ps.col(4) = Vector3d(0, 0, 0);
+				/*
+				// We find the best fit for the following conic
+				// phi = Ax^2 + Bxy + Cy^2 + Dx + Ey + F
+				// Which has gradient
+				// (2Ax + By + D, Bx + 2Cy + E)
+				// Thus at the origin (x = 0, y = 0) the gradient is simply
+				// (D, E)
+				// Which can be converted back into 3D by inverse transformation
+				// We use the least squares method to find such fit
 
-			// We find the best fit for the following conic
-			// phi = Ax^2 + Bxy + Cy^2 + Dx + Ey + F
-			// Which has gradient
-			// (2Ax + By + D, Bx + 2Cy + E)
-			// Thus at the origin (x = 0, y = 0) the gradient is simply
-			// (D, E)
-			// Which can be converted back into 3D by inverse transformation
-			// We use the least squares method to find such fit
-
-			MatrixXd lsq = MatrixXd(5 /*data points*/, 6 /* parameters */);
-			for(Index p = 0; p < 5; p++)
-			{
-				lsq(p, 0) = ps(0, p)*ps(0, p); // Ax^2
-				lsq(p, 1) = ps(0, p)*ps(1, p); // Bxy
-				lsq(p, 2) = ps(1, p)*ps(1, p); // Cy^2
-				lsq(p, 3) = ps(0, p); //Dx
-				lsq(p, 4) = ps(1, p); //Ey
-				lsq(p, 5) = 1.0; // F
-			}
-
-			// Solve the least squares problem (see "Introducción a los métodos numéricos", José Antonio Ezquerro)
-			Vector<double, 5> rhs;
-			for(Index p = 0; p < 4; p++)
-			{
-				rhs(p) = mus(p);
-			}
-			rhs(4) = self_sol;
-
-			// 6x5 * 5x1 = 6x1
-			Vector<double, 6> rhs_t = lsq.transpose() * rhs;
-			// 6x5 * 5x6 = 6x6
-			Matrix<double, 6, 6> A = lsq.transpose() * lsq;
-			Vector<double, 6> parameters = A.fullPivLu().solve(rhs_t);
-
-			// grad phi
-			Vector3d grad = Vector3d(parameters(3), parameters(4), 0.0);
-			grad = tinv * grad;
-
-			Index panel_idx = geom_sizes[effect_geom] + effect;
-
-			cps(panel_idx) = -4.0 * (freestream.dot(grad)) / freestream.squaredNorm();
-
-			if(!STEADY)
-			{
-				// backward differences for phi evolution
-				// which is roughly equal to mu evolution (see tfg writeup)
-				double partial_mu = 0.0;
-				double sgn = 1.0;
-				if(sln_hist.size() == 0 && !message_put)
+				MatrixXd lsq = MatrixXd(5 /*data points*/, 6 /* parameters */);
+				for(Index p = 0; p < 5; p++)
 				{
-					std::cout << "WARNING: No sln_history!" << std::endl;
-					message_put = true;
+					lsq(p, 0) = ps(0, p)*ps(0, p); // Ax^2
+					lsq(p, 1) = ps(0, p)*ps(1, p); // Bxy
+					lsq(p, 2) = ps(1, p)*ps(1, p); // Cy^2
+					lsq(p, 3) = ps(0, p); //Dx
+					lsq(p, 4) = ps(1, p); //Ey
+					lsq(p, 5) = 1.0; // F
 				}
-				for(size_t i = 0; i < sln_hist.size(); i++)
+
+				// Solve the least squares problem (see "Introducción a los métodos numéricos", José Antonio Ezquerro)
+				Vector<double, 5> rhs;
+				for(Index p = 0; p < 4; p++)
 				{
-					partial_mu += sgn * (double)binom(sln_hist.size() - 1, i) * sln_hist[i](panel_idx);
-					sgn *= -1.0;
+					rhs(p) = mus(p);
 				}
+				rhs(4) = self_sol;
 
-				// wake_scale is our timestep in essence
-				partial_mu /= std::pow(wake_scale, sln_hist.size() - 1);
+				// 6x5 * 5x1 = 6x1
+				Vector<double, 6> rhs_t = lsq.transpose() * rhs;
+				// 6x5 * 5x6 = 6x6
+				Matrix<double, 6, 6> A = lsq.transpose() * lsq;
+				Vector<double, 6> parameters = A.fullPivLu().solve(rhs_t);
 
-				cps(panel_idx) += 2.0 * partial_mu / freestream.squaredNorm();
+				// grad phi
+				Vector3d grad = Vector3d(parameters(3), parameters(4), 0.0);
+				grad = tinv * grad;
+
+				Index panel_idx = geom_sizes[effect_geom] + effect;
+
+				cps(panel_idx) = -2.0 * (freestream.dot(grad)) / ref_freestream.squaredNorm();
+
+				if(!STEADY)
+				{
+					// backward differences for phi evolution
+					// which is roughly equal to mu evolution (see tfg writeup)
+					double partial_mu = 0.0;
+					double sgn = 1.0;
+					if(sln_hist.size() == 0 && !message_put)
+					{
+						std::cout << "WARNING: No sln_history!" << std::endl;
+						message_put = true;
+					}
+					for(size_t i = 0; i < sln_hist.size(); i++)
+					{
+						partial_mu += sgn * (double)binom(sln_hist.size() - 1, i) * sln_hist[i](panel_idx);
+						sgn *= -1.0;
+					}
+
+					// wake_scale is our timestep in essence
+					partial_mu /= std::pow(wake_scale, sln_hist.size() - 1);
+
+					cps(panel_idx) += 2.0 * partial_mu / ref_freestream.squaredNorm();
+				}
 			}
-
-			// ???? Why is this needed to match experimental results?
-			cps(panel_idx) *= 2.0 / M_PI;
 		}
+
 	}
 
-}
-
-void PanelMethod::integrate_velocities(double wake_scale)
-{
-	pos_history.clear();
-	orient_history.clear();
-
-	Vector3d body_pos; body_pos.setZero();
-	Isometry3d body_orient; body_orient.setIdentity();
-
-	// Consider an observer situated in the ground, seeing the wing move.
-	// The (unperturbed) wake is the set of points that the trailing edge of the
-	// wing touches as it moves.
-	// the set of those points are generated by integrating:
-	// dx/dt (inertial) = dx/dt (rotating) + Omega * x
-	// Where dx / dt (rotating) = body_vel  by definition
-	// While this problem has an analytical solution, it's way simpler
-	// to numerically integrate the equations
-	// (We in fact integrate backwards in time)
-	// Note that first edge is trailing edge!
-	for(Index zi = 1; zi < num_wake_edges; zi++)
+	void PanelMethod::integrate_velocities(double wake_scale)
 	{
-		double progress = (double)zi / (double)(num_wake_edges - 1);
-		double arr_progress = (double)(zi - 1) / (double)(num_wake_edges - 1);
+		pos_history.clear();
+		orient_history.clear();
 
-		double pos = 1.0 - std::cos(M_PI * arr_progress * 0.5);
+		Vector3d body_pos; body_pos.setZero();
+		Isometry3d body_orient; body_orient.setIdentity();
 
-		double speed = std::sin(M_PI * progress * 0.5);
-
-		// Interpolated sampling for history
-		// TODO: Maybe higher than linear is good?
-		double array_prog = pos * (double)(num_wake_edges - 1);
-		double step = 1.0 / (double)(num_wake_edges - 1);
-		Index prog_sup = (size_t)(std::ceil(array_prog));
-		Index prog_inf = (size_t)(std::floor(array_prog));
-		double fac_sup =  array_prog - (double)prog_inf;
-		double fac_inf = 1.0 - fac_sup;
-
-		Vector3d vel = vel_history[prog_sup] * fac_sup + vel_history[prog_inf] * fac_inf;
-		Vector3d omega = angvel_history[prog_sup] * fac_sup + angvel_history[prog_inf] * fac_inf;
-
-		// Integrate velocity
-		Vector3d inertial_vel = body_orient * vel;
-		body_pos -= inertial_vel * speed * wake_scale;
-
-		double omega_length = omega.norm();
-		Vector3d omega_norm = omega / omega_length;
-
-		// Integrate rotation
-		if(omega_length > 0.0)
+		// Consider an observer situated in the ground, seeing the wing move.
+		// The (unperturbed) wake is the set of points that the trailing edge of the
+		// wing touches as it moves.
+		// the set of those points are generated by integrating:
+		// dx/dt (inertial) = dx/dt (rotating) + Omega * x
+		// Where dx / dt (rotating) = body_vel  by definition
+		// While this problem has an analytical solution, it's way simpler
+		// to numerically integrate the equations
+		// (We in fact integrate backwards in time)
+		// Note that first edge is trailing edge!
+		for(Index zi = 1; zi < num_wake_edges; zi++)
 		{
-			body_orient = body_orient.rotate(AngleAxisd(-omega_length * speed * wake_scale, omega_norm));
-		}
+			double progress = (double)zi / (double)(num_wake_edges - 1);
+			double arr_progress = (double)(zi - 1) / (double)(num_wake_edges - 1);
 
-		pos_history.push_back(body_pos);
-		orient_history.push_back(body_orient);
-	}
-}
+			double pos = 1.0 - std::cos(M_PI * arr_progress * 0.5);
 
-void PanelMethod::timestep(const Vector3d &cur_vel, const Vector3d &cur_angvel)
-{
-	// Rebuild wake
+			double speed = std::sin(M_PI * progress * 0.5);
 
-	// Pop-out oldest velocity profile
-	vel_history.pop_back();
-	angvel_history.pop_back();
+			// Interpolated sampling for history
+			// TODO: Maybe higher than linear is good?
+			double array_prog = pos * (double)(num_wake_edges - 1);
+			double step = 1.0 / (double)(num_wake_edges - 1);
+			Index prog_sup = (size_t)(std::ceil(array_prog));
+			Index prog_inf = (size_t)(std::floor(array_prog));
+			double fac_sup =  array_prog - (double)prog_inf;
+			double fac_inf = 1.0 - fac_sup;
 
-	// Push new velocity profile
-	vel_history.push_front(cur_vel);
-	angvel_history.push_front(cur_angvel);
+			Vector3d vel = vel_history[prog_sup] * fac_sup + vel_history[prog_inf] * fac_inf;
+			Vector3d omega = angvel_history[prog_sup] * fac_sup + angvel_history[prog_inf] * fac_inf;
 
-	integrate_velocities(wake_scale);
+			// Integrate velocity
+			Vector3d inertial_vel = body_orient * vel;
+			body_pos -= inertial_vel * speed * wake_scale;
 
-	for(size_t i = 0; i < thin_wings.size(); i++)
-	{
-		// Transfer new wake geometry
-		wakes[i].build_from_history(*thin_wings[i], *this);
-		// Convect mus and build new influence coefficients
-		wakes[i].mu_convect(i, *this);
-	}
+			double omega_length = omega.norm();
+			Vector3d omega_norm = omega / omega_length;
 
-	build_dynamic(false);
-	solve(false);
-
-	for(size_t i = 0; i < thin_wings.size(); i++)
-	{
-		wakes[i].transfer_unsteady_solution(i, *this);
-	}
-}
-
-void PanelMethod::transfer_solution_to_wake()
-{
-	for(size_t i = 0; i < wakes.size(); i++)
-	{
-		wakes[i].inherit_solution(i, *this);
-	}
-
-}
-
-void PanelMethod::compute_phis()
-{
-	Eigen::ArrayXd phis_above(rhs.rows());
-	Eigen::ArrayXd phis_below(rhs.rows());
-
-	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
-	{
-		for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
-		{
-			for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
+			// Integrate rotation
+			if(omega_length > 0.0)
 			{
-				double phi_above = 0.0;
-				double phi_below = 0.0;
-				auto effect_idx = (Index)(effect + geom_sizes[effect_geom]);
-				// Effect of main panels
-				for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
-				{
-					phi_above += induced_phi(cause_geom, cause, *thin_wings[effect_geom], effect, true);
-					phi_below += induced_phi(cause_geom, cause, *thin_wings[effect_geom], effect, false);
-				}
-				// Effect of wake panels
-				for(Index wake_cause = 0; wake_cause < thin_wings[cause_geom]->trailing_panels.cols(); wake_cause++)
-				{
-					phi_above += induced_phi_wake(cause_geom, wake_cause, *thin_wings[effect_geom], effect, true);
-					phi_below += induced_phi_wake(cause_geom, wake_cause, *thin_wings[effect_geom], effect, false);
-				}
-
-				phis_above(effect_idx) = phi_above;
-				phis_below(effect_idx) = phi_below;
+				body_orient = body_orient.rotate(AngleAxisd(-omega_length * speed * wake_scale, omega_norm));
 			}
+
+			pos_history.push_back(body_pos);
+			orient_history.push_back(body_orient);
 		}
+	}
+
+	void PanelMethod::timestep(const Vector3d &cur_vel, const Vector3d &cur_angvel)
+	{
+		// Rebuild wake
+
+		// Pop-out oldest velocity profile
+		vel_history.pop_back();
+		angvel_history.pop_back();
+
+		// Push new velocity profile
+		vel_history.push_front(cur_vel);
+		angvel_history.push_front(cur_angvel);
+
+		integrate_velocities(wake_scale);
+
+		for(size_t i = 0; i < thin_wings.size(); i++)
+		{
+			// Transfer new wake geometry
+			wakes[i].build_from_history(*thin_wings[i], *this);
+			// Convect mus and build new influence coefficients
+			wakes[i].mu_convect(i, *this);
+		}
+
+		build_dynamic(false);
+		solve(false);
+
+		for(size_t i = 0; i < thin_wings.size(); i++)
+		{
+			wakes[i].transfer_unsteady_solution(i, *this);
+		}
+	}
+
+	void PanelMethod::transfer_solution_to_wake()
+	{
+		for(size_t i = 0; i < wakes.size(); i++)
+		{
+			wakes[i].inherit_solution(i, *this);
+		}
+
+	}
+
+	void PanelMethod::compute_phis()
+	{
+		Eigen::ArrayXd phis_above(rhs.rows());
+		Eigen::ArrayXd phis_below(rhs.rows());
+
+		for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
+		{
+			for (size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
+			{
+				for (Index effect = 0; effect < thin_wings[effect_geom]->quads.cols(); effect++)
+				{
+					double phi_above = 0.0;
+					double phi_below = 0.0;
+					auto effect_idx = (Index)(effect + geom_sizes[effect_geom]);
+					// Effect of main panels
+					for (Index cause = 0; cause < thin_wings[cause_geom]->quads.cols(); cause++)
+					{
+						phi_above += induced_phi(cause_geom, cause, *thin_wings[effect_geom], effect, true);
+						phi_below += induced_phi(cause_geom, cause, *thin_wings[effect_geom], effect, false);
+					}
+					// Effect of wake panels
+					for(Index wake_cause = 0; wake_cause < thin_wings[cause_geom]->trailing_panels.cols(); wake_cause++)
+					{
+						phi_above += induced_phi_wake(cause_geom, wake_cause, *thin_wings[effect_geom], effect, true);
+						phi_below += induced_phi_wake(cause_geom, wake_cause, *thin_wings[effect_geom], effect, false);
+					}
+
+					phis_above(effect_idx) = phi_above;
+					phis_below(effect_idx) = phi_below;
+				}
+			}
 	}
 
 	phi_hist_above.push_front(phis_above);

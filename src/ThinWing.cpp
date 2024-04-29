@@ -155,11 +155,8 @@ ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, do
 		}
 	}
 
-std::cout << solve_mat;
 
 	ArrayXd An = solve_mat.fullPivLu().solve(rhs.matrix());
-
-	std::cout << An << std::endl;
 
 	// Reconstruct lift
 	ArrayXd lift = ArrayXd(num_spanwise);

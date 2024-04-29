@@ -8,6 +8,9 @@ using namespace Eigen;
 
 const double ADVANCE_VEL = 1.0;
 const size_t LONG_TERM_NPANELS = 200;
+const double LONG_TERM_TIMESTEP = 0.01;
+const double SPAN = 1.0;
+const double CHORD = 1.0;
 
 const size_t NPANELS = 100;
 
@@ -39,7 +42,7 @@ void long_term_steady_case(std::shared_ptr<ThinWing> wing, double AoA)
 
 	PanelMethod pan;
 	pan.thin_wings.push_back(wing);
-	pan.shed_initial_wake(LONG_TERM_NPANELS, 0.1, bvel, omega);
+	pan.shed_initial_wake(LONG_TERM_NPANELS, LONG_TERM_TIMESTEP, bvel, omega);
 	pan.build_geometry_matrix();
 	pan.build_dynamic(true);
 	pan.solve(true);
@@ -58,20 +61,32 @@ void long_term_steady_case(std::shared_ptr<ThinWing> wing, double AoA)
 	{
 		std::stringstream s;
 		s << aero_force.transpose();
-		write_string_to_file(make_fname(AoA, "aero_force_3d"), s.str());
+		write_string_to_file(make_fname(AoA, "aero_force_2d"), s.str());
 	}
 
 	ArrayXd spanwise_sol = ArrayXd(wing->num_spanwise - 1);
 	for(size_t i = 0; i < wing->num_spanwise - 1; i++)
 	{
-		spanwise_sol(i) = pan.compute_aero_force(true, i)(1);
+		auto force = pan.compute_aero_force(true, i);
+		// TODO: Division by cos(AoA) is needed because Prandtl returns lift as
+		// component perpendicular to wing and not freestream!
+		spanwise_sol(i) = force(1) / std::cos(AoA);
 	}
 
 	{
 		std::stringstream s;
-		s << spanwise_sol.transpose();
+		// L = 0.5 * rho * v_infty^2 * c * c_L
+		// c_L = int c_p dc
+		//
+		s << spanwise_sol.transpose() / CHORD;
 		write_string_to_file(make_fname(AoA, "spanwise_sol"), s.str());
 	}
+
+	write_string_to_file(make_fname(AoA, "sln"), pan.solution_to_string(0));
+	pan.transfer_solution_to_wake();
+	write_string_to_file(make_fname(AoA, "wake_sln"), pan.wake_solution_to_string(0));
+
+	write_string_to_file(make_fname(AoA, "wake_geom"), pan.wake_geom_to_string(0));
 }
 
 
@@ -88,13 +103,13 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 64, 30.0, 1.0);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 64, SPAN, CHORD);
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 
 	for(double AoA = -0.4; AoA < 0.4; AoA += 0.1)
 	{
-		auto pair = ThinWing::lifting_line_solve(chord_fx, 64 - 1, 30.0, 1.0, AoA);
+		auto pair = ThinWing::lifting_line_solve(chord_fx, 64 - 1, SPAN, CHORD, AoA);
 		{
 			std::stringstream s;
 			s << pair.first.transpose();
@@ -107,5 +122,6 @@ int main()
 		}
 		long_term_steady_case(geom, AoA);
 	}
+
 
 }
