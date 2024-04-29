@@ -128,7 +128,7 @@ ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, do
 	for(size_t i = 0; i < num_spanwise; i++)
 	{
 		double theta = M_PI * (double)i / (double)(num_spanwise - 1);
-		double c = chord_fx(-0.5 * std::cos(theta)).first;
+		double c = chord_fx(-0.5 * std::cos(theta)).first * chord_scale;
 
 		for(size_t n = 1; n <= num_spanwise; n++)
 		{
@@ -165,7 +165,7 @@ ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, do
 	{
 		double sum = 0.0;
 		double theta = M_PI * (double)i / (double)(num_spanwise - 1);
-		double c = chord_fx(-0.5 * std::cos(theta)).first;
+		double c = chord_fx(-0.5 * std::cos(theta)).first * chord_scale;
 		for(size_t n = 1; n <= num_spanwise; n++)
 		{
 			sum += An(n - 1) * sin((double)n * theta);

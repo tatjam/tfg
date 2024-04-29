@@ -7,12 +7,13 @@
 using namespace Eigen;
 
 const double ADVANCE_VEL = 1.0;
-const size_t LONG_TERM_NPANELS = 50;
+const size_t LONG_TERM_NPANELS = 200;
 const double LONG_TERM_TIMESTEP = 0.1;
 const double SPAN = 5.0;
-const double CHORD = 1.0;
+const double CHORD = 0.14;
 
-const size_t NPANELS = 50;
+
+const size_t NPANELS = 200;
 
 std::string make_fname(double AoA, const std::string& sub)
 {

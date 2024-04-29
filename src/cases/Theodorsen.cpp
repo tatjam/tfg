@@ -17,7 +17,7 @@ const size_t MAX_IT = NPANELS * 4;
 const double HEAVE_AMPL = 0.001;
 const double HEAVE_OMEGA = 1.0;
 
-const bool USE_CENTERLINE = true;
+const bool USE_CENTERLINE = false;
 
 void write_params()
 {
@@ -85,7 +85,7 @@ void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool wr
 
 	for (size_t i = 0; i < MAX_IT; i++)
 	{
-		double heave = HEAVE_AMPL * ADVANCE_VEL * std::sin(HEAVE_OMEGA * t);
+		double heave = HEAVE_AMPL * ADVANCE_VEL * std::cos(HEAVE_OMEGA * t);
 		Vector3d bvel = Eigen::Vector3d(0, heave, -ADVANCE_VEL);
 		Vector3d omega = Eigen::Vector3d(0.0, 0.0, 0.0);
 		dynamic.timestep(bvel, omega);
@@ -143,7 +143,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 32, 10.0, 2.0);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 32, 10.0, 0.1);
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 

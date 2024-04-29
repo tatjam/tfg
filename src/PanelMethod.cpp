@@ -794,7 +794,10 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 					// wake_scale is our timestep in essence
 					partial_mu /= std::pow(wake_scale, sln_hist.size() - 1);
 
-					cps(panel_idx) += 2.0 * partial_mu / ref_freestream.squaredNorm();
+					// TODO: + or - (- seems to work better)
+					// Also we may have to introduce the varition in phi due to change of boundary
+					// conditions!!!!
+					cps(panel_idx) -= 2.0 * partial_mu / ref_freestream.squaredNorm();
 				}
 			}
 		}
