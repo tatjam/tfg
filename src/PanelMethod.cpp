@@ -19,6 +19,8 @@ void PanelMethod::build_geometry_matrix()
 
 	geometry_matrix = MatrixXd(total_size, total_size);
 	dynamic_matrix = MatrixXd(total_size, total_size);
+	geometry_matrix.setZero();
+	dynamic_matrix.setZero();
 	rhs = MatrixXd(total_size, 1);
 	cps = MatrixXd(total_size, 1);
 
@@ -90,7 +92,9 @@ Eigen::Vector3d PanelMethod::induced_vel_wake(const Wake &wake, Eigen::Index cau
 
 		Index panel_idx = cause_trailing * (num_wake_edges - 1) + i;
 		if(MODE == 1)
+		{
 			val *= wake.influences(panel_idx);
+		}
 		else if(MODE == 2)
 		{
 			double infl = wake.influences(panel_idx);
@@ -213,6 +217,10 @@ void PanelMethod::build_dynamic_matrix(const bool STEADY)
 	// edge panels, thus the wake become "integrated" into the contribution
 	// from the last panel.
 
+	// VERY IMPORTANT, otherwise some untouched panels will get uninitialized values
+	// or values from previous steps
+	dynamic_matrix.setZero();
+
 	for(size_t effect_geom = 0; effect_geom < thin_wings.size(); effect_geom++)
 	{
 		for(size_t cause_geom = 0; cause_geom < thin_wings.size(); cause_geom++)
@@ -306,11 +314,16 @@ void PanelMethod::solve(bool STEADY)
 		guess.setZero();
 	}
 
-	BiCGSTAB<MatrixXd> solver;
 	MatrixXd mat = geometry_matrix + dynamic_matrix;
+	/*
+	BiCGSTAB<MatrixXd> solver;
 	solver.compute(mat);
 	VectorXd sln = solver.solveWithGuess(rhs, guess);
+	*/
+	VectorXd sln = mat.fullPivLu().solve(rhs);
 	sln_hist.push_front(sln);
+	double relative_error = (mat*sln - rhs).norm() / rhs.norm();
+	std::cout << "Solve relative error is " << relative_error << std::endl;
 
 	if(!STEADY)
 	{
@@ -722,25 +735,21 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 				// Center point
 				ps.col(4) = Vector3d(0, 0, 0);
 
-				/*
 				// We find the best fit for the following conic
-				// phi = Ax^2 + Bxy + Cy^2 + Dx + Ey + F
+				// phi = Ax + By + C
 				// Which has gradient
-				// (2Ax + By + D, Bx + 2Cy + E)
+				// (A, B)
 				// Thus at the origin (x = 0, y = 0) the gradient is simply
-				// (D, E)
+				// (A, B)
 				// Which can be converted back into 3D by inverse transformation
 				// We use the least squares method to find such fit
 
-				MatrixXd lsq = MatrixXd(5 /*data points*/, 6 /* parameters */);
+				MatrixXd lsq = MatrixXd(5 /*data points*/, 3 /* parameters */);
 				for(Index p = 0; p < 5; p++)
 				{
-					lsq(p, 0) = ps(0, p)*ps(0, p); // Ax^2
-					lsq(p, 1) = ps(0, p)*ps(1, p); // Bxy
-					lsq(p, 2) = ps(1, p)*ps(1, p); // Cy^2
-					lsq(p, 3) = ps(0, p); //Dx
-					lsq(p, 4) = ps(1, p); //Ey
-					lsq(p, 5) = 1.0; // F
+					lsq(p, 0) = ps(0, p); // Ax
+					lsq(p, 1) = ps(1, p); // By
+					lsq(p, 2) = 1.0; // C
 				}
 
 				// Solve the least squares problem (see "Introducción a los métodos numéricos", José Antonio Ezquerro)
@@ -751,14 +760,14 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 				}
 				rhs(4) = self_sol;
 
-				// 6x5 * 5x1 = 6x1
-				Vector<double, 6> rhs_t = lsq.transpose() * rhs;
-				// 6x5 * 5x6 = 6x6
-				Matrix<double, 6, 6> A = lsq.transpose() * lsq;
-				Vector<double, 6> parameters = A.fullPivLu().solve(rhs_t);
+				// 3x5 * 5x1 = 3x1
+				Vector<double, 3> rhs_t = lsq.transpose() * rhs;
+				// 3x5 * 5x3 = 3x3
+				Matrix<double, 3, 3> A = lsq.transpose() * lsq;
+				Vector<double, 3> parameters = A.fullPivLu().solve(rhs_t);
 
 				// grad phi
-				Vector3d grad = Vector3d(parameters(3), parameters(4), 0.0);
+				Vector3d grad = Vector3d(parameters(0), parameters(1), 0.0);
 				grad = tinv * grad;
 
 				Index panel_idx = geom_sizes[effect_geom] + effect;

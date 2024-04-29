@@ -7,12 +7,12 @@
 using namespace Eigen;
 
 const double ADVANCE_VEL = 1.0;
-const size_t LONG_TERM_NPANELS = 200;
-const double LONG_TERM_TIMESTEP = 0.01;
-const double SPAN = 1.0;
+const size_t LONG_TERM_NPANELS = 50;
+const double LONG_TERM_TIMESTEP = 0.1;
+const double SPAN = 5.0;
 const double CHORD = 1.0;
 
-const size_t NPANELS = 100;
+const size_t NPANELS = 50;
 
 std::string make_fname(double AoA, const std::string& sub)
 {
@@ -82,6 +82,8 @@ void long_term_steady_case(std::shared_ptr<ThinWing> wing, double AoA)
 		write_string_to_file(make_fname(AoA, "spanwise_sol"), s.str());
 	}
 
+	//write_string_to_file(make_fname(AoA, "dyn_mat"), pan.dynamic_matrix_to_string());
+	//write_string_to_file(make_fname(AoA, "std_mat"), pan.geometry_matrix_to_string());
 	write_string_to_file(make_fname(AoA, "sln"), pan.solution_to_string(0));
 	pan.transfer_solution_to_wake();
 	write_string_to_file(make_fname(AoA, "wake_sln"), pan.wake_solution_to_string(0));
@@ -103,7 +105,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 64, SPAN, CHORD);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 32, 64, SPAN, CHORD);
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 
