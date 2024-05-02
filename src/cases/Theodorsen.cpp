@@ -15,9 +15,11 @@ const double TSTEP = 0.025;
 const size_t MAX_IT = NPANELS * 4;
 
 const double HEAVE_AMPL = 0.001;
-const double HEAVE_OMEGA = 1.0;
+const double HEAVE_OMEGA = 12.424;
 
-const bool USE_CENTERLINE = false;
+const double CHORD = 1.0;
+
+const bool USE_CENTERLINE = true;
 
 void write_params()
 {
@@ -27,6 +29,7 @@ void write_params()
 	s << MAX_IT << std::endl;
 	s << HEAVE_AMPL << std::endl;
 	s << HEAVE_OMEGA << std::endl;
+	s << CHORD << std::endl;
 	write_string_to_file("workdir/theodorsen_params.dat", s.str());
 }
 
@@ -95,7 +98,8 @@ void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool wr
 			dynamic.compute_cps(false);
 			forces(i) = dynamic.compute_aero_force(USE_CENTERLINE)(1);
 
-			steady.shed_initial_wake(NPANELS, TSTEP, bvel, omega);
+			// Long steady wake!
+			steady.shed_initial_wake(NPANELS, TSTEP * 8.0, bvel, omega);
 			steady.build_dynamic(true);
 			steady.solve(true);
 			steady.compute_cps(true);
@@ -143,7 +147,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 32, 10.0, 0.1);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 16, 50.0, CHORD);
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 

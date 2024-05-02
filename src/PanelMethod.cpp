@@ -320,7 +320,7 @@ void PanelMethod::solve(bool STEADY)
 	solver.compute(mat);
 	VectorXd sln = solver.solveWithGuess(rhs, guess);
 	*/
-	VectorXd sln = mat.fullPivLu().solve(rhs);
+	VectorXd sln = mat.householderQr().solve(rhs);
 	sln_hist.push_front(sln);
 	double relative_error = (mat*sln - rhs).norm() / rhs.norm();
 	std::cout << "Solve relative error is " << relative_error << std::endl;
@@ -548,8 +548,8 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 				Index idx = center_line_pos * (thin_wings[0]->num_chorwise - 1) + i;
 				Vector3d nrm = thin_wings[0]->normals.col(idx);
 				double area = get_area(*thin_wings[0], idx);
-				Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(0, idx));
-				Vector3d b = thin_wings[0]->vertices.col(thin_wings[0]->quads(3, idx));
+				Vector3d a = thin_wings[0]->vertices.col(thin_wings[0]->quads(1, idx));
+				Vector3d b = thin_wings[0]->vertices.col(thin_wings[0]->quads(2, idx));
 				double length = (b - a).norm();
 				Vector3d force = nrm * cps(idx);
 				acc += force * length;

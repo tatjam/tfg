@@ -116,13 +116,14 @@ ThinWing::generate(std::function<std::pair<double, double>(double)> chord_fx,
 
 #include <iostream>
 
-std::pair<ArrayXd, ArrayXd>
+std::tuple<ArrayXd, ArrayXd, ArrayXd>
 ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, double span, double chord_scale, double AoA)
 {
 	MatrixXd solve_mat = MatrixXd(num_spanwise, num_spanwise);
 	ArrayXd rhs = ArrayXd(num_spanwise);
+	const double clalpha = 1.52;
 	// RHS is very simple, 2pia
-	rhs.setConstant(2.0 * M_PI * AoA);
+	rhs.setConstant(clalpha * M_PI * AoA);
 
 	// Build coefficients at each point
 	for(size_t i = 0; i < num_spanwise; i++)
@@ -135,12 +136,12 @@ ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, do
 			double a = (4.0 * span / c) * sin((double)n * theta);
 			if(i != 0 && i != num_spanwise - 1)
 			{
-				a += 2.0 * M_PI * n * sin((double)n * theta) / sin(theta);
+				a += clalpha * M_PI * n * sin((double)n * theta) / sin(theta);
 			}
 			else
 			{
 				// when theta = 0 or PI, the expression is degenerate
-				double term = 2.0 * M_PI * n * n;
+				double term = clalpha * M_PI * n * n;
 				double sign = 1.0;
 				if(i == num_spanwise - 1 && n % 2 == 0)
 				{
@@ -166,12 +167,16 @@ ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, do
 		double sum = 0.0;
 		double theta = M_PI * (double)i / (double)(num_spanwise - 1);
 		double c = chord_fx(-0.5 * std::cos(theta)).first * chord_scale;
-		for(size_t n = 1; n <= num_spanwise; n++)
+		for(Index n = 1; n <= num_spanwise; n++)
 		{
 			sum += An(n - 1) * sin((double)n * theta);
 		}
 		lift(i) *= 2.0 * sum / c;
 	}
 
-	return std::make_pair(lift, An);
+	// Reconstruct drag
+	ArrayXd drag = ArrayXd(num_spanwise);
+	drag.setZero();
+
+	return std::make_tuple(lift, drag, An);
 }

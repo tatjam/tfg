@@ -64,45 +64,12 @@ void long_term_steady_case(std::shared_ptr<ThinWing> wing, double AoA)
 		s << aero_force.transpose();
 		write_string_to_file(make_fname(AoA, "aero_force_2d"), s.str());
 	}
-
-	ArrayXd spanwise_sol = ArrayXd(wing->num_spanwise - 1);
-	ArrayXd spanwise_drag = ArrayXd(wing->num_spanwise - 1);
-	for(size_t i = 0; i < wing->num_spanwise - 1; i++)
-	{
-		auto force = pan.compute_aero_force(true, i);
-		// We use small-angle consideration
-		spanwise_sol(i) = force(1);
-		spanwise_drag(i) = force(1) * AoA + force(0);
-	}
-
-	{
-		std::stringstream s;
-		// L = 0.5 * rho * v_infty^2 * c * c_L
-		// c_L = int c_p dc
-		//
-		s << spanwise_sol.transpose() / CHORD;
-		write_string_to_file(make_fname(AoA, "spanwise_sol"), s.str());
-	}
-
-	{
-		std::stringstream s;
-		s << spanwise_drag.transpose() / CHORD;
-		write_string_to_file(make_fname(AoA, "spanwise_drag"), s.str());
-	}
-
-	//write_string_to_file(make_fname(AoA, "dyn_mat"), pan.dynamic_matrix_to_string());
-	//write_string_to_file(make_fname(AoA, "std_mat"), pan.geometry_matrix_to_string());
-	write_string_to_file(make_fname(AoA, "sln"), pan.solution_to_string(0));
-	pan.transfer_solution_to_wake();
-	write_string_to_file(make_fname(AoA, "wake_sln"), pan.wake_solution_to_string(0));
-
-	write_string_to_file(make_fname(AoA, "wake_geom"), pan.wake_geom_to_string(0));
 }
 
 
 int main()
 {
-	std::filesystem::create_directory("./workdir/steady_rectangle/");
+	std::filesystem::create_directory("./workdir/clalpha/");
 	auto chord_fx = [](double span_pos)
 	{
 		return std::make_pair(1.0, 0.0);
@@ -117,25 +84,8 @@ int main()
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 
-	std::vector<double> AoAs = std::vector<double>({-0.087, 0.0001, 0.087});
-	for(auto& AoA : AoAs)
+	for(double AoA = -0.4; AoA < 0.4; AoA += 0.01)
 	{
-		auto tuple = ThinWing::lifting_line_solve(chord_fx, 32 - 1, SPAN, CHORD, AoA);
-		{
-			std::stringstream s;
-			s << std::get<0>(tuple).transpose();
-			write_string_to_file(make_fname(AoA, "prandtl"), s.str());
-		}
-		{
-			std::stringstream s;
-			s << std::get<1>(tuple).transpose();
-			write_string_to_file(make_fname(AoA, "prandtl_drag"), s.str());
-		}
-		{
-			std::stringstream s;
-			s << std::get<2>(tuple).transpose();
-			write_string_to_file(make_fname(AoA, "An"), s.str());
-		}
 		long_term_steady_case(geom, AoA);
 	}
 
