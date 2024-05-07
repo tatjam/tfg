@@ -681,6 +681,7 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 					mus(vert) += self_sol * self_area;
 
 					Index vert_idx = tw.quads(vert, effect);
+
 					for(Index nbor = 0; nbor < 8; nbor++)
 					{
 						Index nbor_idx = tw.neighbors(nbor, effect);
@@ -710,7 +711,24 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 					}
 
 					mus(vert) /= areas(vert);
+
+					// this neighbor is always in -z dir, so if it's not present
+					// we are a leading edge
+					bool is_leading_edge =
+							tw.neighbors(1, effect) < 0;
+					if(is_leading_edge && vert <= 1)
+					{
+						// If that's the case, the area approximation is horrible, as it
+						// assumes that there's a "wake" coming from the freestream
+						// We instead set the mu to a negative value:
+						// 0 would make the most sense, but because we are using
+						// a small number of panels a "exageration" factor can be introduced.
+						const double exag_factor = -0.0;
+						// wowaw
+						mus(vert) *= exag_factor;
+					}
 				}
+
 
 				// We know mu at each of the quadrilateral corners, and at its center
 				// For convenience, we will project the quadrilateral into a flat plane,
@@ -775,7 +793,7 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 
 				cps(panel_idx) = -2.0 * (freestream.dot(grad)) / ref_freestream.squaredNorm();
 				// Corrección debido a la perdida del gran gradiente en los extremos
-				cps(panel_idx) *= 1.25;
+				//cps(panel_idx) *= 1.25;
 
 				if(!STEADY)
 				{
@@ -804,6 +822,7 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 				}
 
 			}
+
 		}
 
 	}
