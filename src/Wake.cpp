@@ -54,6 +54,13 @@ void Wake::build_from_history(const ThinWing &wing, const PanelMethod& panels)
 		double speed = std::sin(M_PI * progress * 0.5);
 
 		Vector3d body_pos = panels.pos_history[zi - 1];
+
+		// Make wake parallel to enforce more exact Kutta?
+		/*
+		double parallel_factor = 1.0 - std::max(std::min(((double)zi - 10.0) / 5.0, 1.0), 0.0);
+		body_pos(1) = panels.pos_history[0](1) * parallel_factor + body_pos(1) * (1.0 - parallel_factor);
+		*/
+
 		Isometry3d body_orient = panels.orient_history[zi - 1];
 
 		for(Index xi = 0; xi < num_trailing_edge; xi++)

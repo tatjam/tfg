@@ -8,7 +8,7 @@ using namespace Eigen;
 
 const double ADVANCE_VEL = 1.0;
 const size_t LONG_TERM_NPANELS = 200;
-const double LONG_TERM_TIMESTEP = 0.15;
+const double LONG_TERM_TIMESTEP = 0.75;
 const double SPAN = 10.0;
 const double CHORD = 1.0;
 
@@ -23,7 +23,7 @@ std::string make_fname(double AoA, const std::string& sub)
 	}
 	std::stringstream fname_base;
 	fname_base << std::fixed << std::setprecision(2);
-	fname_base << "workdir/clalpha/" << sub << "_" << AoA << "_.dat";
+	fname_base << "workdir/steady_rectangle/" << sub << "_" << AoA << "_.dat";
 	return fname_base.str();
 }
 
@@ -117,7 +117,7 @@ int main()
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 
-	std::vector<double> AoAs = std::vector<double>({-0.087, 0.0001, 0.087});
+	std::vector<double> AoAs = std::vector<double>({-0.15, -0.12, -0.087, 0.0001, 0.087, 0.12, 0.15});
 	for(auto& AoA : AoAs)
 	{
 		auto tuple = ThinWing::lifting_line_solve(chord_fx, 32 - 1, SPAN, CHORD, AoA);

@@ -183,6 +183,7 @@ double PanelMethod::induced_phi(const ThinWing &cause, Eigen::Index cause_panel,
 
 void PanelMethod::build_rhs(const bool STEADY)
 {
+	rhs.setZero();
 	for(size_t geom = 0; geom < thin_wings.size(); geom++)
 	{
 		for(size_t panel = 0; panel < thin_wings[geom]->quads.cols(); panel++)
@@ -236,7 +237,7 @@ void PanelMethod::build_dynamic_matrix(const bool STEADY)
 					auto effect_idx = (Index)(effect + geom_sizes[effect_geom]);
 					auto cause_idx = (Index)(cause + geom_sizes[cause_geom]);
 
-					dynamic_matrix(effect_idx, cause_idx) = induced;
+					dynamic_matrix(effect_idx, cause_idx) += induced;
 				}
 			}
 		}
@@ -773,6 +774,8 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 				Index panel_idx = geom_sizes[effect_geom] + effect;
 
 				cps(panel_idx) = -2.0 * (freestream.dot(grad)) / ref_freestream.squaredNorm();
+				// Corrección debido a la perdida del gran gradiente en los extremos
+				cps(panel_idx) *= 1.25;
 
 				if(!STEADY)
 				{
@@ -799,6 +802,7 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 					// conditions!!!!
 					cps(panel_idx) -= 2.0 * partial_mu / ref_freestream.squaredNorm();
 				}
+
 			}
 		}
 

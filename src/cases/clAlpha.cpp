@@ -7,8 +7,8 @@
 using namespace Eigen;
 
 const double ADVANCE_VEL = 1.0;
-const size_t LONG_TERM_NPANELS = 200;
-const double LONG_TERM_TIMESTEP = 0.15;
+const size_t LONG_TERM_NPANELS = 20;
+const double LONG_TERM_TIMESTEP = 1.5;
 const double SPAN = 10.0;
 const double CHORD = 1.0;
 

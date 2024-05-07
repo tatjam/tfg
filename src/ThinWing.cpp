@@ -121,9 +121,9 @@ ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, do
 {
 	MatrixXd solve_mat = MatrixXd(num_spanwise, num_spanwise);
 	ArrayXd rhs = ArrayXd(num_spanwise);
-	const double clalpha = 1.52;
+	const double clalpha = 2.0 * M_PI;
 	// RHS is very simple, 2pia
-	rhs.setConstant(clalpha * M_PI * AoA);
+	rhs.setConstant(clalpha * AoA);
 
 	// Build coefficients at each point
 	for(size_t i = 0; i < num_spanwise; i++)
@@ -136,12 +136,12 @@ ThinWing::lifting_line_solve(ThinWing::ChordFx chord_fx, size_t num_spanwise, do
 			double a = (4.0 * span / c) * sin((double)n * theta);
 			if(i != 0 && i != num_spanwise - 1)
 			{
-				a += clalpha * M_PI * n * sin((double)n * theta) / sin(theta);
+				a += clalpha * n * sin((double)n * theta) / sin(theta);
 			}
 			else
 			{
 				// when theta = 0 or PI, the expression is degenerate
-				double term = clalpha * M_PI * n * n;
+				double term = clalpha * n * n;
 				double sign = 1.0;
 				if(i == num_spanwise - 1 && n % 2 == 0)
 				{

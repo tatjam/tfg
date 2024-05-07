@@ -7,15 +7,15 @@ using namespace Eigen;
 
 const double ADVANCE_VEL = 1.0;
 const size_t LONG_TERM_NPANELS = 200;
-const double LONG_TERM_TSTEP = 0.0625;
+const double LONG_TERM_TSTEP = 0.1;
 const double LONG_TERM_AOA = 0.1;
 
-const size_t NPANELS = 50;
+const size_t NPANELS = 100;
 const double TSTEP = 0.025;
-const size_t MAX_IT = NPANELS * 4;
+const size_t MAX_IT = NPANELS * 2;
 
 const double HEAVE_AMPL = 0.001;
-const double HEAVE_OMEGA = 12.424;
+const double HEAVE_OMEGA = 7.6;
 
 const double CHORD = 1.0;
 
