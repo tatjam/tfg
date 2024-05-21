@@ -646,6 +646,8 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 
 	void PanelMethod::compute_cps(bool STEADY)
 	{
+		// Square of reference velocity
+		const double Vref2 = 1.0;
 		assert(sln_hist.size() > 1 || STEADY);
 
 		Eigen::ArrayXd& solution = sln_hist.front();
@@ -791,7 +793,7 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 
 				Index panel_idx = geom_sizes[effect_geom] + effect;
 
-				cps(panel_idx) = -2.0 * (freestream.dot(grad)) / ref_freestream.squaredNorm();
+				cps(panel_idx) = -2.0 * (freestream.dot(grad)) / Vref2 * Vref2;
 				// Corrección debido a la perdida del gran gradiente en los extremos
 				//cps(panel_idx) *= 1.25;
 
@@ -818,7 +820,7 @@ double PanelMethod::get_area(const ThinWing &wing, Eigen::Index panel)
 					// TODO: + or - (- seems to work better)
 					// Also we may have to introduce the varition in phi due to change of boundary
 					// conditions!!!!
-					cps(panel_idx) -= 2.0 * partial_mu / ref_freestream.squaredNorm();
+					cps(panel_idx) -= 2.0 * partial_mu / Vref2;
 				}
 
 			}
