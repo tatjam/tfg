@@ -10,16 +10,16 @@ const size_t LONG_TERM_NPANELS = 200;
 const double LONG_TERM_TSTEP = 0.1;
 const double LONG_TERM_AOA = 0.1;
 
-const size_t NPANELS = 100;
-const double TSTEP = 0.025;
+const size_t NPANELS = 50;
+const double TSTEP = 0.03;
 const size_t MAX_IT = NPANELS * 2;
 
-const double HEAVE_AMPL = 0.001;
-const double HEAVE_OMEGA = 7.6;
+const double HEAVE_AMPL = 0.01;
+const double HEAVE_OMEGA = 4.3;
 
 const double CHORD = 1.0;
 
-const bool USE_CENTERLINE = true;
+const bool USE_CENTERLINE = false;
 
 void write_params()
 {
@@ -80,18 +80,21 @@ void prepare_oscillating_case(std::shared_ptr<ThinWing> wing, PanelMethod& stead
 
 }
 
-void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool write_results, double& t)
+void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool write_results, double& t,
+							  std::stringstream& bvels)
 {
 	Eigen::ArrayXd forces = Eigen::ArrayXd(MAX_IT);
 	Eigen::ArrayXd steady_forces = Eigen::ArrayXd(MAX_IT);
 	Eigen::ArrayXd alpha = Eigen::ArrayXd(MAX_IT);
 
+
 	for (size_t i = 0; i < MAX_IT; i++)
 	{
-		double heave = HEAVE_AMPL * ADVANCE_VEL * std::cos(HEAVE_OMEGA * t);
+		double heave = -HEAVE_AMPL * ADVANCE_VEL * std::cos(HEAVE_OMEGA * t);
 		Vector3d bvel = Eigen::Vector3d(0, heave, -ADVANCE_VEL);
 		Vector3d omega = Eigen::Vector3d(0.0, 0.0, 0.0);
 		dynamic.timestep(bvel, omega);
+		bvels << "{{" << -bvel(2) << ", 0.0, " << bvel(1) <<"}, {0, 0, 0}}" << std::endl;
 		std::cout << "It: " << i + 1 << " / " << MAX_IT << " (t = " << t << ")" << std::endl;
 		if(write_results)
 		{
@@ -109,6 +112,9 @@ void iterate_oscillating_case(PanelMethod& steady, PanelMethod& dynamic, bool wr
 		}
 
 		t += TSTEP;
+	}
+
+	{
 	}
 
 	if(write_results)
@@ -147,7 +153,7 @@ int main()
 		return 0.0;
 	};
 
-	auto geom = ThinWing::generate(chord_fx, camber_fx, 16, 16, 50.0, CHORD);
+	auto geom = ThinWing::generate(chord_fx, camber_fx, 24, 24, 50.0, CHORD);
 	geom->generate_normals();
 	write_string_to_file("workdir/geom.dat", geom->quads_to_string());
 
@@ -158,9 +164,10 @@ int main()
 	PanelMethod dynamic;
 	double t = 0.0;
 
+	std::stringstream bvels;
 	prepare_oscillating_case(geom, steady, dynamic);
 	auto start = std::chrono::system_clock::now();
-	iterate_oscillating_case(steady, dynamic, true, t);
+	iterate_oscillating_case(steady, dynamic, true, t, bvels);
 	auto end = std::chrono::system_clock::now();
 	std::cout << "Pre-computation took: " <<
 			  std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
@@ -168,7 +175,9 @@ int main()
 	// Iterativo: 19817ms
 	// Normal: 20896
 	// Conclusion: bottle-neck is matrix building code (dynamic matrix)
-	iterate_oscillating_case(steady, dynamic, true, t);
+	iterate_oscillating_case(steady, dynamic, true, t, bvels);
+
+	write_string_to_file("workdir/theodorsen_bvel.dat", bvels.str());
 
 	write_string_to_file("workdir/mat.dat", steady.geometry_matrix_to_string());
 	write_string_to_file("workdir/phis_above.dat", dynamic.phis_to_string(0, false, true));
